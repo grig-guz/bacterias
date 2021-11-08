@@ -3,13 +3,15 @@ import numpy as np
 from petri_env.petri_core import PetriAgent, PetriEnergy, PetriMaterial, PetriWorld
 from pettingzoo.mpe._mpe_utils.core import Landmark
 from pettingzoo.mpe._mpe_utils.scenario import BaseScenario
-
+from policies.simple_policy import *
+from utils import *
 
 
 class PetriScenario(BaseScenario):
 
     def __init__(self):
         super().__init__()
+        self.visibility = 3
 
     def make_world(self, num_agents, materials_map, energy_locs, eating_distance):
         world = PetriWorld(eating_distance)
@@ -21,7 +23,8 @@ class PetriScenario(BaseScenario):
             color = np.array([1, 0, 0])
             consumes = np.random.uniform(-1, 1, 3)
             produces = np.random.uniform(-1, 1, 3)
-            agent = PetriAgent(loc=loc, consumes=consumes, produces=produces, material=color)
+            policy = GCNPolicy(obs_dim=8, action_dim=4)
+            agent = PetriAgent(loc=loc, consumes=consumes, produces=produces, material=color, policy=policy)
             agent.name = f'agent_{i}'
             agent.collide = False
             agent.silent = True
@@ -61,20 +64,62 @@ class PetriScenario(BaseScenario):
     def reward(self, agent, world):
         return 0
 
+    """
     def observation(self, agent, world):
         # get positions of all entities in this agent's reference frame
         entity_pos = []
         for entity in world.landmarks:
             entity_pos.append(entity.state.p_pos - agent.state.p_pos)
         return np.concatenate([agent.state.p_vel] + entity_pos)
+    """
+    def observation(self, agent, world):
+        # GCN observation
+        # get positions of all entities in this agent's reference frame
+        entity_pos = []
+        for entity in world.landmarks:
+            entity_pos.append(entity.state.p_pos - agent.state.p_pos)
+
+        landmark_positions = world.resource_positions
+        agent_positions = world.agent_positions
+
+
+        agents_states = []
+        if len(agent_positions) > 0:
+            agents_states = self.get_features(agent, world.agents, agent_positions, self.get_agent_features, world)
+
+        landmark_states = []
+        if len(landmark_positions) > 0:
+            landmark_states = self.get_features(agent, world.landmarks, landmark_positions, self.get_landmark_features, world)
+            
+        return [np.array(agents_states), 
+                np.array(landmark_states), 
+                np.concatenate([agent.state.p_pos, agent.state.p_vel, agent.color, agent.consumes, agent.produces])]
+
+    """
+    def observation(self, agent, world):
+        # CNN observation
+        # get positions of all entities in this agent's reference frame
+        entity_pos = []
+        for entity in world.landmarks:
+            entity_pos.append(entity.state.p_pos - agent.state.p_pos)
+
+        landmark_positions = world.resource_positions
+        agent_positions = world.agent_positions
+
+
+        to_remain, min_idx = dist_util(, self.visibility)
+
+        return np.concatenate([agent.state.p_vel] + entity_pos)
+    """
 
     def add_new_agents(self, world, new_a_locs):
-        for loc in new_a_locs:
+        for i, loc in enumerate(new_a_locs):
             loc += np.random.uniform(-0.1, 0.1, 2)
             color = np.array([1, 0, 0])
             consumes = np.random.uniform(-1, 1, 3)
             produces = np.random.uniform(-1, 1, 3)
-            agent = PetriAgent(loc=loc, consumes=consumes, produces=produces, material=color)
+            policy = GCNPolicy(obs_dim=8, action_dim=4)
+            agent = PetriAgent(loc=loc, consumes=consumes, produces=produces, material=color, policy=policy)
             agent.name = f'agent_{world.agent_counter}'
             world.agent_counter += 1
             agent.collide = False
@@ -82,3 +127,27 @@ class PetriScenario(BaseScenario):
             agent.state.p_vel = np.zeros(world.dim_p)
             agent.state.c = np.zeros(world.dim_c)
             world.agents.append(agent)
+
+
+    def get_features(self, agent, entity_list, entity_dist_list, feat_func, world):
+        acc = []
+        selected_list, min_idx = dist_util(np.array([agent.state.p_pos]), entity_dist_list, self.visibility)
+        selected_list, min_idx = selected_list[0], min_idx[0]
+        for i, selected in enumerate(selected_list):
+            if selected:
+                acc.append(feat_func(entity_list[min_idx[i]], agent))
+        return acc
+
+    def get_agent_features(self, agent1, agent2):
+        dist_diff = agent1.state.p_pos - agent2.state.p_pos
+        vel = agent1.state.p_vel
+        color = agent1.color
+        consumes = agent1.consumes
+        produces = agent1.produces
+        return np.concatenate([dist_diff, vel, color, consumes, produces])
+
+    def get_landmark_features(self, landmark, agent):
+        dist_diff = landmark.state.p_pos - agent.state.p_pos
+        rtype = np.array([int(landmark.resource_type == "energy")])
+        color = landmark.color
+        return np.concatenate([dist_diff, rtype, color])

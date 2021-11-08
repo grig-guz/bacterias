@@ -1,12 +1,13 @@
 import numpy as np
-from sklearn.metrics.pairwise import euclidean_distances
 from pettingzoo.mpe._mpe_utils.core import Agent, Landmark, World
+from utils import *
 
 class PetriEnergy(Landmark):
 
     def __init__(self, loc):
         super().__init__()
         self.color = np.array([1, 1, 0])
+        self.resource_type = "energy"
         self.state.p_pos = loc
 
 
@@ -14,12 +15,14 @@ class PetriMaterial(Landmark):
 
     def __init__(self, loc, color):
         super().__init__()
+        self.resource_type = "material"
         self.state.p_pos = np.array(loc)
         self.color = np.array(color)
 
+
 class PetriAgent(Agent):
 
-    def __init__(self, loc, consumes, produces, material, policy):
+    def __init__(self, loc, consumes, produces, material, policy=None):
         super().__init__()
 
         # TODO: Fix this
@@ -30,8 +33,6 @@ class PetriAgent(Agent):
         self.can_reproduce = False
         self.step_alive = 0
         self.policy = policy
-
-    
 
 
 class PetriWorld(World):
@@ -74,10 +75,7 @@ class PetriWorld(World):
         if len(r_pos) == 0 or len(a_pos) == 0:
             return
 
-        r_a_dists = euclidean_distances(r_pos, a_pos)
-        min_dists_idx = np.argmin(r_a_dists, axis=1)
-
-        to_remain = r_a_dists[np.arange(len(r_pos)), min_dists_idx] > self.eating_distace
+        to_remain, min_dists_idx = dist_util(r_pos, a_pos, self.eating_distace)
 
         if (to_remain == False).any():
             print("Removing!")
@@ -88,3 +86,4 @@ class PetriWorld(World):
         for i, val in enumerate(to_remain):
             if val == False:
                 self.agents[min_dists_idx[i]].can_reproduce = True 
+        

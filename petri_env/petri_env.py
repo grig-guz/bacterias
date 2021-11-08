@@ -114,6 +114,12 @@ class raw_env(SimpleEnv):
 
         self.reset_agent_state(to_keep, new_a_locs=new_a_locs)
 
+    def predict_action(self, agent, obs):
+        return self.world.agents[self._index_map[agent]].policy(obs)
+
+    def observe(self, agent):
+        return self.scenario.observation(self.world.agents[self._index_map[agent]], self.world)#.astype(np.float32)
+
     def render(self, mode='human'):
         if not self.world.entities:
             return None
