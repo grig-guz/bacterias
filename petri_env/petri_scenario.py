@@ -4,6 +4,7 @@ from petri_env.petri_core import PetriAgent, PetriEnergy, PetriMaterial, PetriWo
 from pettingzoo.mpe._mpe_utils.core import Landmark
 from pettingzoo.mpe._mpe_utils.scenario import BaseScenario
 from policies.simple_policy import *
+import copy
 from utils import *
 
 
@@ -20,10 +21,10 @@ class PetriScenario(BaseScenario):
         world.agents = []
         for i in range(num_agents):
             loc = np.random.uniform(-1, 1, 2)
-            color = np.array([1, 0, 0])
+            color = np.array([1., 0., 0.])
             consumes = np.random.uniform(-1, 1, 3)
             produces = np.random.uniform(-1, 1, 3)
-            policy = GCNPolicy(obs_dim=8, action_dim=4)
+            policy = GCNPolicy(obs_dim=8, action_dim=4, sigma=0.1)
             agent = PetriAgent(loc=loc, consumes=consumes, produces=produces, material=color, policy=policy)
             agent.name = f'agent_{i}'
             agent.collide = False
@@ -112,21 +113,19 @@ class PetriScenario(BaseScenario):
         return np.concatenate([agent.state.p_vel] + entity_pos)
     """
 
-    def add_new_agents(self, world, new_a_locs):
-        for i, loc in enumerate(new_a_locs):
-            loc += np.random.uniform(-0.1, 0.1, 2)
-            color = np.array([1, 0, 0])
-            consumes = np.random.uniform(-1, 1, 3)
-            produces = np.random.uniform(-1, 1, 3)
-            policy = GCNPolicy(obs_dim=8, action_dim=4)
-            agent = PetriAgent(loc=loc, consumes=consumes, produces=produces, material=color, policy=policy)
-            agent.name = f'agent_{world.agent_counter}'
+    def add_new_agents(self, world, parents):
+        for _, agent in enumerate(parents):
+            new_agent = copy.deepcopy(agent)
+            new_agent.state.p_pos += np.random.uniform(-0.1, 0.1, 2)
+            new_agent.color += np.random.uniform(-0.1, 0.1, 3)
+            new_agent.consumes += np.random.uniform(-0.1, 0.1, 3)
+            new_agent.produces += np.random.uniform(-0.1, 0.1, 3)
+            new_agent.policy.mutate()
+            new_agent.name = f'agent_{world.agent_counter}'
             world.agent_counter += 1
-            agent.collide = False
-            agent.silent = True
-            agent.state.p_vel = np.zeros(world.dim_p)
-            agent.state.c = np.zeros(world.dim_c)
-            world.agents.append(agent)
+            new_agent.state.p_vel = np.zeros(world.dim_p)
+            new_agent.state.c = np.zeros(world.dim_c)
+            world.agents.append(new_agent)
 
 
     def get_features(self, agent, entity_list, entity_dist_list, feat_func, world):

@@ -1,4 +1,3 @@
-from hashlib import new
 from pettingzoo.utils.conversions import parallel_wrapper_fn
 from pettingzoo.mpe._mpe_utils import rendering
 from pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv, make_env
@@ -6,7 +5,7 @@ from pettingzoo.utils.agent_selector import agent_selector
 from petri_env.petri_scenario import PetriScenario
 import numpy as np
 from gym import spaces
-
+import copy
 
 
 class raw_env(SimpleEnv):
@@ -28,10 +27,10 @@ class raw_env(SimpleEnv):
         super().__init__(scenario, world, max_cycles, continuous_actions)
         self.metadata['name'] = "petri_env"
 
-    def reset_agent_state(self, to_keep, new_a_locs):
+    def reset_agent_state(self, to_keep, parents):
         self.world.agents = [self.world.agents[i] for i in to_keep]
         # Added the ability for agents to die.
-        self.scenario.add_new_agents(self.world, new_a_locs)
+        self.scenario.add_new_agents(self.world, parents)
 
         self.agents = [agent.name for agent in self.world.agents]
         self._agent_selector = agent_selector(self.agents)
@@ -73,7 +72,7 @@ class raw_env(SimpleEnv):
     def _execute_world_step(self):
         # set action for each agent
         to_keep = []
-        new_a_locs = []
+        parents = []
         for i, agent in enumerate(self.world.agents):
             action = self.current_actions[i]
             scenario_action = []
@@ -92,7 +91,7 @@ class raw_env(SimpleEnv):
 
             if agent.can_reproduce:
                 agent.can_reproduce = False
-                new_a_locs.append(agent.state.p_pos)
+                parents.append(agent)
             
             if agent.step_alive < self.agent_lifetime:
                 to_keep.append(i)
@@ -112,10 +111,7 @@ class raw_env(SimpleEnv):
 
             self.rewards[agent.name] = reward
 
-        self.reset_agent_state(to_keep, new_a_locs=new_a_locs)
-
-    def predict_action(self, agent, obs):
-        return self.world.agents[self._index_map[agent]].policy(obs)
+        self.reset_agent_state(to_keep, parents=parents)
 
     def observe(self, agent):
         return self.scenario.observation(self.world.agents[self._index_map[agent]], self.world)#.astype(np.float32)

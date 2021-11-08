@@ -68,6 +68,29 @@ class PetriWorld(World):
 
         self.consume_resources()
 
+    def integrate_state(self, p_force):
+        for i, entity in enumerate(self.entities):
+            if not entity.movable:
+                continue
+            entity.state.p_vel = entity.state.p_vel * (1 - self.damping)
+            if (p_force[i] is not None):
+                entity.state.p_vel += (p_force[i] / entity.mass) * self.dt
+            if entity.max_speed is not None:
+                speed = np.sqrt(np.square(entity.state.p_vel[0]) + np.square(entity.state.p_vel[1]))
+                if speed > entity.max_speed:
+                    entity.state.p_vel = entity.state.p_vel / np.sqrt(np.square(entity.state.p_vel[0]) + np.square(entity.state.p_vel[1])) * entity.max_speed
+            entity.state.p_pos += entity.state.p_vel * self.dt
+            if entity.state.p_pos[0] > 5:
+                entity.state.p_pos[0] = -5
+            elif entity.state.p_pos[0] < -5:
+                entity.state.p_pos[0] = 5
+
+            if entity.state.p_pos[1] > 5:
+                entity.state.p_pos[1] = -5
+            elif entity.state.p_pos[1] < -5:
+                entity.state.p_pos[1] = 5
+
+
     def consume_resources(self):
         a_pos = np.array(self.agent_positions)
         r_pos = np.array(self.resource_positions)
