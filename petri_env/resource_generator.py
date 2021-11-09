@@ -4,9 +4,10 @@ from petri_env.petri_core import PetriEnergy, PetriMaterial
 
 class ResourceGenerator():
 
-    def __init__(self, world, recov_time):
+    def __init__(self, world, recov_time, world_bound):
         self.world = world
         self.recov_time = recov_time
+        self.world_bound = world_bound
 
     def generate_initial_resources(self):
         raise NotImplementedError
@@ -23,25 +24,26 @@ class ResourceGenerator():
 
 class RandomResourceGenerator(ResourceGenerator):
 
-    def __init__(self, world, recov_time, num_resources):
-        super().__init__(world, recov_time)
+    def __init__(self, world, recov_time, world_bound, num_resources):
+        super().__init__(world, recov_time, world_bound)
         self.num_resources = num_resources
 
     def generate_initial_resources(self):
         while len(self.world.landmarks) < self.num_resources:
             resource_kind = np.random.choice(2, 1)
+            loc = np.random.uniform(-self.world_bound, self.world_bound, 2)
             if resource_kind == 0:
                 # Energy
-                new_resource = PetriEnergy(None)
+                new_resource = PetriEnergy(loc)
             else:
-                new_color = np.random.uniform(0, 1, 3)
-                new_resource = PetriMaterial(None, new_color)
+                color = np.random.uniform(0, 1, 3)
+                new_resource = PetriMaterial(loc, color)
 
             self.world.landmarks.append(new_resource)
             self.activate_resource(new_resource)
 
     def activate_resource(self, resource):
-        new_loc = np.random.uniform(-5, 5, 2)
+        new_loc = np.random.uniform(-self.world_bound, self.world_bound, 2)
         resource.loc = new_loc
         resource.is_active = True
         resource.inactive_count = 0
@@ -49,8 +51,8 @@ class RandomResourceGenerator(ResourceGenerator):
 
 class FixedResourceGenerator(ResourceGenerator):
 
-    def __init__(self, world, recov_time):
-        super().__init__(world, recov_time)
+    def __init__(self, world, recov_time, world_bound):
+        super().__init__(world, recov_time, world_bound)
 
     def generate_initial_resources(self, locs, types):
         return 

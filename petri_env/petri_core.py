@@ -40,6 +40,7 @@ class PetriAgent(Agent):
         self.can_reproduce = False
         self.step_alive = 0
         self.policy = policy
+        self.is_active = True
 
     def mutate(self):
         self.state.p_pos += np.random.uniform(-0.1, 0.1, 2)
@@ -51,8 +52,9 @@ class PetriAgent(Agent):
 
 class PetriWorld(World):
 
-    def __init__(self, eating_distance):
+    def __init__(self, world_bound, eating_distance):
         super().__init__()
+        self.world_bound = world_bound
         self.eating_distace = eating_distance
 
     @property
@@ -60,8 +62,17 @@ class PetriWorld(World):
         return [agent.state.p_pos for agent in self.agents]
 
     @property
+    def active_resource_positions(self):
+        return [resource.state.p_pos for resource in self.landmarks if resource.is_active]
+
+    @property
+    def active_resources(self):
+        return [resource for resource in self.landmarks if resource.is_active]
+
+    @property
     def resource_positions(self):
         return [resource.state.p_pos for resource in self.landmarks]
+
 
     # update state of the world
     def step(self):
@@ -92,13 +103,13 @@ class PetriWorld(World):
                 if speed > entity.max_speed:
                     entity.state.p_vel = entity.state.p_vel / np.sqrt(np.square(entity.state.p_vel[0]) + np.square(entity.state.p_vel[1])) * entity.max_speed
             entity.state.p_pos += entity.state.p_vel * self.dt
-            if entity.state.p_pos[0] > 5:
-                entity.state.p_pos[0] = -5
-            elif entity.state.p_pos[0] < -5:
-                entity.state.p_pos[0] = 5
+            if entity.state.p_pos[0] > self.world_bound:
+                entity.state.p_pos[0] = -self.world_bound
+            elif entity.state.p_pos[0] < -self.world_bound:
+                entity.state.p_pos[0] = self.world_bound
 
-            if entity.state.p_pos[1] > 5:
-                entity.state.p_pos[1] = -5
-            elif entity.state.p_pos[1] < -5:
-                entity.state.p_pos[1] = 5
+            if entity.state.p_pos[1] > self.world_bound:
+                entity.state.p_pos[1] = -self.world_bound
+            elif entity.state.p_pos[1] < -self.world_bound:
+                entity.state.p_pos[1] = self.world_bound
     

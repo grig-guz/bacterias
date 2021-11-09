@@ -7,7 +7,7 @@ def collect_render_results(env, mode):
     results = []
 
     env.reset()
-    for i in range(1000):
+    for i in range(100000):
         if i > 0:
             for agent in env.agent_iter(env.num_agents // 2 + 1):
                 obs, reward, done, info = env.last()

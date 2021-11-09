@@ -68,6 +68,6 @@ class GCNPolicy(PetriPolicy):
 
     def agg_func(self, inpt, inner_layer, outer_layer):
         inpt = self.relu(inner_layer(inpt))
-        inpt = torch.sum(inpt, dim=0)
+        inpt = torch.mean(inpt, dim=0)
         inpt = self.relu(outer_layer(inpt))
         return inpt

@@ -3,28 +3,16 @@ from pettingzoo.mpe._mpe_utils import rendering
 from pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv, make_env
 from pettingzoo.utils.agent_selector import agent_selector
 from petri_env.petri_scenario import PetriScenario
-from petri_env.resource_generator import RandomResourceGenerator, FixedResourceGenerator
 import numpy as np
 from gym import spaces
 
-RANDOM_REC_GEN = "random"
-FIXED_REC_GEN = "fixed"
-
 class raw_env(SimpleEnv):
 
-    def __init__(self, rec_generation_type="random", max_cycles=5000, continuous_actions=False):
+    def __init__(self, res_gen_type="random", max_cycles=100000, continuous_actions=False):
         
-        self.agent_lifetime = 200
+        self.agent_lifetime = 70
         eating_distance = 0.3
-        scenario = PetriScenario()
-
-        if rec_generation_type == RANDOM_REC_GEN:
-            resource_generator = RandomResourceGenerator()
-        elif rec_generation_type == FIXED_REC_GEN:
-            pass
-        else:
-            print("Unknown resource generator type")
-            raise Exception
+        scenario = PetriScenario(res_gen_type)
 
         materials_map = {(-0.5, -0.5): [0.5, 0.5, 0.5],
                          (0.5, 0.5): [0.9, 0.9, 0.9]}
@@ -35,8 +23,8 @@ class raw_env(SimpleEnv):
                         np.random.uniform(-1, 1, 2), 
                         np.random.uniform(-1, 1, 2)]
 
-        world = scenario.make_world(num_agents=3, materials_map=materials_map, energy_locs=energy_locs, eating_distance=eating_distance)
-        
+        world = scenario.make_world(num_agents=30, materials_map=materials_map, energy_locs=energy_locs, eating_distance=eating_distance)
+
         super().__init__(scenario, world, max_cycles, continuous_actions)
         self.metadata['name'] = "petri_env"
 
@@ -86,7 +74,7 @@ class raw_env(SimpleEnv):
 
     def _execute_world_step(self):
         # set action for each agent
-        self.scenario.consume_resouces(self.world)
+        self.scenario.consume_resources(self.world)
         to_keep = []
         parents = []
         for i, agent in enumerate(self.world.agents):
@@ -128,7 +116,6 @@ class raw_env(SimpleEnv):
             self.rewards[agent.name] = reward
 
         self.reset_agent_state(to_keep, parents=parents)
-        self.scenario.update_resources(self.world)
 
     def observe(self, agent):
         return self.scenario.observation(self.world.agents[self._index_map[agent]], self.world)#.astype(np.float32)
@@ -144,13 +131,14 @@ class raw_env(SimpleEnv):
         # create rendering geometry
         self.render_geoms = None
         self.render_geoms_xform = None
+        active_entities = [ent for ent in self.world.entities if ent.is_active]
         if self.render_geoms is None:
             # import rendering only if we need it (and don't import for headless machines)
             # from gym.envs.classic_control import rendering
             # from multiagent._mpe_utils import rendering
             self.render_geoms = []
             self.render_geoms_xform = []
-            for entity in self.world.entities:
+            for entity in active_entities:
                 geom = rendering.make_circle(entity.size)
                 xform = rendering.Transform()
                 if 'agent' in entity.name:
@@ -190,12 +178,13 @@ class raw_env(SimpleEnv):
             self.viewer.text_lines[idx].set_text(message)
 
         # update bounds to center around agent
-        all_poses = [entity.state.p_pos for entity in self.world.entities]
+        all_poses = [entity.state.p_pos for entity in active_entities]
         cam_range = np.max(np.abs(np.array(all_poses))) + 1
         self.viewer.set_max_size(cam_range)
         # update geometry positions
-        for e, entity in enumerate(self.world.entities):
-            self.render_geoms_xform[e].set_translation(*entity.state.p_pos)
+        for e, entity in enumerate(active_entities):
+            if entity.is_active:
+                self.render_geoms_xform[e].set_translation(*entity.state.p_pos)
         # render to display or array
         return self.viewer.render(return_rgb_array=mode == 'rgb_array')
 
