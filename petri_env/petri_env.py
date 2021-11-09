@@ -3,13 +3,28 @@ from pettingzoo.mpe._mpe_utils import rendering
 from pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv, make_env
 from pettingzoo.utils.agent_selector import agent_selector
 from petri_env.petri_scenario import PetriScenario
+from petri_env.resource_generator import RandomResourceGenerator, FixedResourceGenerator
 import numpy as np
 from gym import spaces
-import copy
 
+RANDOM_REC_GEN = "random"
+FIXED_REC_GEN = "fixed"
 
 class raw_env(SimpleEnv):
-    def __init__(self, max_cycles=5000, continuous_actions=False):
+
+    def __init__(self, rec_generation_type="random", max_cycles=5000, continuous_actions=False):
+        
+        self.agent_lifetime = 200
+        eating_distance = 0.3
+        scenario = PetriScenario()
+
+        if rec_generation_type == RANDOM_REC_GEN:
+            resource_generator = RandomResourceGenerator()
+        elif rec_generation_type == FIXED_REC_GEN:
+            pass
+        else:
+            print("Unknown resource generator type")
+            raise Exception
 
         materials_map = {(-0.5, -0.5): [0.5, 0.5, 0.5],
                          (0.5, 0.5): [0.9, 0.9, 0.9]}
@@ -20,12 +35,11 @@ class raw_env(SimpleEnv):
                         np.random.uniform(-1, 1, 2), 
                         np.random.uniform(-1, 1, 2)]
 
-        self.agent_lifetime = 100
-        eating_distance = 0.3
-        scenario = PetriScenario()
         world = scenario.make_world(num_agents=3, materials_map=materials_map, energy_locs=energy_locs, eating_distance=eating_distance)
+        
         super().__init__(scenario, world, max_cycles, continuous_actions)
         self.metadata['name'] = "petri_env"
+
 
     def reset_agent_state(self, to_keep, parents):
         self.world.agents = [self.world.agents[i] for i in to_keep]
@@ -64,6 +78,7 @@ class raw_env(SimpleEnv):
             else:
                 self.action_spaces[agent.name] = spaces.Discrete(space_dim)
             self.observation_spaces[agent.name] = spaces.Box(low=-np.float32(np.inf), high=+np.float32(np.inf), shape=(obs_dim,), dtype=np.float32)
+
         self.current_actions = [None] * self.num_agents
         self.rewards = {name: 0. for name in self.agents}
         if len(self.agents) > 0:
@@ -71,6 +86,7 @@ class raw_env(SimpleEnv):
 
     def _execute_world_step(self):
         # set action for each agent
+        self.scenario.consume_resouces(self.world)
         to_keep = []
         parents = []
         for i, agent in enumerate(self.world.agents):
@@ -112,6 +128,7 @@ class raw_env(SimpleEnv):
             self.rewards[agent.name] = reward
 
         self.reset_agent_state(to_keep, parents=parents)
+        self.scenario.update_resources(self.world)
 
     def observe(self, agent):
         return self.scenario.observation(self.world.agents[self._index_map[agent]], self.world)#.astype(np.float32)
@@ -120,7 +137,9 @@ class raw_env(SimpleEnv):
         if not self.world.entities:
             return None
         if self.viewer is None:
-            self.viewer = rendering.Viewer(700, 700)
+            self.viewer = rendering.Viewer(900, 900)
+            self.viewer.set_max_size(6)
+
 
         # create rendering geometry
         self.render_geoms = None

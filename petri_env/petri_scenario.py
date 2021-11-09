@@ -10,9 +10,10 @@ from utils import *
 
 class PetriScenario(BaseScenario):
 
-    def __init__(self):
+    def __init__(self, agents_produce_resources=False):
         super().__init__()
         self.visibility = 3
+        self.agents_produce_resouces = agents_produce_resources
 
     def make_world(self, num_agents, materials_map, energy_locs, eating_distance):
         world = PetriWorld(eating_distance)
@@ -113,20 +114,46 @@ class PetriScenario(BaseScenario):
         return np.concatenate([agent.state.p_vel] + entity_pos)
     """
 
+    def consume_resources(self, world):
+        a_pos = np.array(world.agent_positions)
+        r_pos = np.array(world.resource_positions)
+
+        if len(r_pos) == 0 or len(a_pos) == 0:
+            return
+
+        to_remain, min_dists_idx = dist_util(r_pos, a_pos, world.eating_distace)
+
+        if (to_remain == False).any():
+            print("Removing!")
+        
+        for i, val in enumerate(to_remain):
+            if not val:
+                # If resource is eaten, the landmark is inactive
+                # and the agent can reproduce.
+                curr_agent = world.agents[min_dists_idx[i]]
+                curr_agent.can_reproduce = True
+
+                if self.agents_produce_resouces:
+                    if isinstance(world.landmarks[i], PetriEnergy):
+                        new_loc = np.random.uniform(-5, 5, 2)
+                        world.landmarks[i] = PetriEnergy(new_loc)
+                    else:
+                        new_loc = curr_agent.state.p_loc + np.random.uniform(-1, 1, 2)
+                        world.landmarks[i] = PetriMaterial(new_loc, curr_agent.produces)
+                else:
+                    world.landmarks[i].is_active = False
+
+
     def add_new_agents(self, world, parents):
         for _, agent in enumerate(parents):
             new_agent = copy.deepcopy(agent)
-            new_agent.state.p_pos += np.random.uniform(-0.1, 0.1, 2)
-            new_agent.color += np.random.uniform(-0.1, 0.1, 3)
-            new_agent.consumes += np.random.uniform(-0.1, 0.1, 3)
-            new_agent.produces += np.random.uniform(-0.1, 0.1, 3)
-            new_agent.policy.mutate()
+            new_agent.mutate()
+            new_agent.step_alive = 0
             new_agent.name = f'agent_{world.agent_counter}'
             world.agent_counter += 1
             new_agent.state.p_vel = np.zeros(world.dim_p)
             new_agent.state.c = np.zeros(world.dim_c)
             world.agents.append(new_agent)
-
 
     def get_features(self, agent, entity_list, entity_dist_list, feat_func, world):
         acc = []

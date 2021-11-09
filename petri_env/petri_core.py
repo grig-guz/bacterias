@@ -2,16 +2,25 @@ import numpy as np
 from pettingzoo.mpe._mpe_utils.core import Agent, Landmark, World
 from utils import *
 
-class PetriEnergy(Landmark):
+
+class PetriLandmark(Landmark):  # properties of landmark entities
+    def __init__(self):
+        super().__init__()
+        self.is_active = True
+        self.inactive_count = 0
+
+
+class PetriEnergy(PetriLandmark):
 
     def __init__(self, loc):
         super().__init__()
-        self.color = np.array([1, 1, 0])
         self.resource_type = "energy"
         self.state.p_pos = loc
+        self.is_active = True
+        self.color = np.array([1, 1, 0])
 
 
-class PetriMaterial(Landmark):
+class PetriMaterial(PetriLandmark):
 
     def __init__(self, loc, color):
         super().__init__()
@@ -24,8 +33,6 @@ class PetriAgent(Agent):
 
     def __init__(self, loc, consumes, produces, material, policy=None):
         super().__init__()
-
-        # TODO: Fix this
         self.state.p_pos = np.array(loc)
         self.consumes = np.array(consumes)
         self.produces = np.array(produces)
@@ -33,6 +40,13 @@ class PetriAgent(Agent):
         self.can_reproduce = False
         self.step_alive = 0
         self.policy = policy
+
+    def mutate(self):
+        self.state.p_pos += np.random.uniform(-0.1, 0.1, 2)
+        self.color += np.random.uniform(-0.1, 0.1, 3)
+        self.consumes += np.random.uniform(-0.1, 0.1, 3)
+        self.produces += np.random.uniform(-0.1, 0.1, 3)
+        self.policy.mutate()
 
 
 class PetriWorld(World):
@@ -66,8 +80,6 @@ class PetriWorld(World):
         for agent in self.agents:
             self.update_agent_state(agent)
 
-        self.consume_resources()
-
     def integrate_state(self, p_force):
         for i, entity in enumerate(self.entities):
             if not entity.movable:
@@ -89,24 +101,4 @@ class PetriWorld(World):
                 entity.state.p_pos[1] = -5
             elif entity.state.p_pos[1] < -5:
                 entity.state.p_pos[1] = 5
-
-
-    def consume_resources(self):
-        a_pos = np.array(self.agent_positions)
-        r_pos = np.array(self.resource_positions)
-
-        if len(r_pos) == 0 or len(a_pos) == 0:
-            return
-
-        to_remain, min_dists_idx = dist_util(r_pos, a_pos, self.eating_distace)
-
-        if (to_remain == False).any():
-            print("Removing!")
-        
-        self.landmarks = [self.landmarks[i] for i, val in enumerate(to_remain) if val]
-
-        # Agents that ate something can reproduce.
-        for i, val in enumerate(to_remain):
-            if val == False:
-                self.agents[min_dists_idx[i]].can_reproduce = True 
-        
+    
