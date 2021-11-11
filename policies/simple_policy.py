@@ -40,7 +40,7 @@ class GCNPolicy(PetriPolicy):
         self.agg_landmarks_linear = nn.Linear(32, 32)
         self.c_agent_linear = nn.Linear(13, 32)
 
-        self.final_linear = nn.Linear(96, 5)
+        self.final_linear = nn.Linear(96, 9)
 
 
     def forward(self, obs):

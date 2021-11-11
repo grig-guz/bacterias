@@ -1,5 +1,6 @@
 import numpy as np
 from pettingzoo.mpe._mpe_utils.core import Agent, Landmark, World
+from pettingzoo.utils.agent_selector import agent_selector
 from utils import *
 
 
@@ -31,7 +32,7 @@ class PetriMaterial(PetriLandmark):
 
 class PetriAgent(Agent):
 
-    def __init__(self, loc, consumes, produces, material, policy=None):
+    def __init__(self, config, loc, consumes, produces, material, policy=None):
         super().__init__()
         self.state.p_pos = np.array(loc)
         self.consumes = np.array(consumes)
@@ -51,23 +52,18 @@ class PetriAgent(Agent):
         self.produces += np.random.uniform(-0.1, 0.1, 3)
         self.policy.mutate()
 
-class PetriEnergyAgent(Agent):
+class PetriEnergyAgent(PetriAgent):
 
     def __init__(self, config, loc, consumes, produces, material, policy=None):
-        super().__init__()
-        self.state.p_pos = np.array(loc)
-        self.consumes = np.array(consumes)
-        self.produces = np.array(produces)
-        self.color = np.array(material)
-        self.policy = policy
-        self.is_active = True
-        self.consumed_material = False
+        super().__init__(config, loc, consumes, produces, material, policy=policy)
         self.max_energy = config['max_energy']
         self.energy_store = self.max_energy / 2
         self.move_cost = config['move_cost']
         self.idle_cost = config['idle_cost']
         self.prod_cost = config['prod_cost']
         self.reprod_cost = config['reprod_cost']
+        self.currently_eating = None
+        self.currently_attacking = None
 
     def mutate(self):
         self.state.p_pos += np.random.uniform(-0.1, 0.1, 2)
@@ -76,7 +72,39 @@ class PetriEnergyAgent(Agent):
         self.produces += np.random.uniform(-0.1, 0.1, 3)
         self.policy.mutate()
 
+    def can_produce_resource(self):
+        if self.energy_store - self.prod_cost > 0:
+            self.energy_store -= self.prod_cost
+            return True
+        else:
+            return False
 
+    def idle(self):
+        self.energy_store -= self.idle_cost
+
+    def move(self):
+        self.energy_store -= self.move_cost
+
+    def assign_eat(self, idx, world):
+        self.currently_eating = world.landmarks[idx]
+
+    def eat(self, landmark):
+        # TODO: Fix this stuff
+        self.energy_store = min(self.max_energy, self.energy_store + 300)
+
+    def reproduce(self):
+        if self.energy_store - self.reprod_cost > 0:
+            self.energy_store -= self.reprod_cost
+            return True
+        else:
+            return False
+
+    def assign_attack(self, agent):
+        self.currently_attacking = agent
+
+    def attack_agent(self, ag):
+        # TODO: Fix this stuff
+        self.energy_store = min(self.max_energy, self.energy_store + 300)
 
 class PetriWorld(World):
 

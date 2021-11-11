@@ -4,17 +4,17 @@ env_config:
   agents_produce_resources: true
   world_bound: 4
   eating_distance: 0.3
-  num_agents: 1
+  num_agents: 5
   visibility: 2
   sigma: 0.2
   model_sigma: 0.002
-  num_resources: 15
+  num_resources: 30
   recov_time: 50
   agent_lifetime: 100
-  
+
   use_energy_resource: False
-  move_cost: 2
-  prod_cost: 3
-  reprod_cost: 5
-  idle_cost: 1
-  max_energy: 30
+  move_cost: 10
+  prod_cost: 150
+  reprod_cost: 150
+  idle_cost: 5
+  max_energy: 300
