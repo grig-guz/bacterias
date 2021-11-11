@@ -1,7 +1,7 @@
 import random
-
+import math
 import numpy as np
-
+from pettingzoo.mpe._mpe_utils.rendering import FilledPolygon, PolyLine
 
 def collect_render_results(env, mode):
     results = []
@@ -16,7 +16,6 @@ def collect_render_results(env, mode):
                 elif isinstance(obs, dict) and 'action_mask' in obs:
                     action = random.choice(np.flatnonzero(obs['action_mask']))
                 else:
-                    action = env.action_space(agent).sample()
                     unwrapped = env.unwrapped
                     action = unwrapped.world.agents[unwrapped._index_map[agent]].policy(obs)
                 env.step(action)
@@ -41,3 +40,30 @@ def render_test(env, custom_tests={}):
             if mode == "human":
                 assert res is None
     env.close()
+
+
+def make_star(radius=10, res=30, filled=True):
+    points = []
+    for i in range(res):
+        ang = 2 * math.pi * i / res
+        points.append((math.cos(ang) * radius, math.sin(ang) * radius))
+    if filled:
+        return FilledPolygon(points)
+    else:
+        return PolyLine(points, True)
+
+def make_square(radius=10, res=30, filled=True):
+    points = []
+    sq2 = radius * math.sqrt(2)
+    points.append((radius, radius))
+    points.append((radius, 0))
+    points.append((radius, -radius))
+    points.append((0, -radius))
+    points.append((-radius, -radius))
+    points.append((-radius, 0))
+    points.append((-radius, radius))
+    points.append((0, radius))
+    if filled:
+        return FilledPolygon(points)
+    else:
+        return PolyLine(points, True)

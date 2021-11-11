@@ -1,6 +1,7 @@
 
 import numpy as np
 from sklearn.metrics.pairwise import euclidean_distances
+import math
 
 
 def dist_util(src_pos, dst_pos, criterion):
@@ -12,5 +13,3 @@ def dist_util(src_pos, dst_pos, criterion):
         min_dists_idx = np.argsort(src_dst_dists, axis=1)
         to_remain = min_dists_idx[:, :criterion]
     return to_remain, min_dists_idx
-
-

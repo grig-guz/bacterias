@@ -4,10 +4,11 @@ from petri_env.petri_core import PetriEnergy, PetriMaterial
 
 class ResourceGenerator():
 
-    def __init__(self, world, recov_time, world_bound):
+    def __init__(self, config, world):
         self.world = world
-        self.recov_time = recov_time
-        self.world_bound = world_bound
+        self.recov_time = config['recov_time']
+        self.world_bound = config['world_bound']
+        self.use_energy_resource = config['use_energy_resource']
 
     def generate_initial_resources(self):
         raise NotImplementedError
@@ -24,15 +25,15 @@ class ResourceGenerator():
 
 class RandomResourceGenerator(ResourceGenerator):
 
-    def __init__(self, world, recov_time, world_bound, num_resources):
-        super().__init__(world, recov_time, world_bound)
-        self.num_resources = num_resources
+    def __init__(self, config, world):
+        super().__init__(config, world)
+        self.num_resources = config['num_resources']
 
     def generate_initial_resources(self):
         while len(self.world.landmarks) < self.num_resources:
             resource_kind = np.random.choice(2, 1)
             loc = np.random.uniform(-self.world_bound, self.world_bound, 2)
-            if resource_kind == 0:
+            if resource_kind == 0 and self.use_energy_resource:
                 # Energy
                 new_resource = PetriEnergy(loc)
             else:
@@ -51,8 +52,8 @@ class RandomResourceGenerator(ResourceGenerator):
 
 class FixedResourceGenerator(ResourceGenerator):
 
-    def __init__(self, world, recov_time, world_bound):
-        super().__init__(world, recov_time, world_bound)
+    def __init__(self, config, world):
+        super().__init__(config, world)
 
     def generate_initial_resources(self, locs, types):
         return 

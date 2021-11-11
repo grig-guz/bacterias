@@ -10,7 +10,7 @@ class PetriPolicy(nn.Module):
         self.sigma = sigma
 
     def mutate(self):
-        for name, W in self.state_dict().items():
+        for _, W in self.state_dict().items():
             eps = torch.randn(size=W.shape)
             W += eps * self.sigma
 

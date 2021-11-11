@@ -3,7 +3,7 @@ import copy
 
 from pettingzoo.mpe._mpe_utils.scenario import BaseScenario
 
-from petri_env.petri_core import PetriAgent, PetriEnergy, PetriMaterial, PetriWorld
+from petri_env.petri_core import PetriAgent, PetriEnergyAgent, PetriEnergy, PetriMaterial, PetriWorld
 from petri_env.resource_generator import RandomResourceGenerator, FixedResourceGenerator
 from policies.simple_policy import *
 
@@ -16,39 +16,35 @@ FIXED_REC_GEN = "fixed"
 class PetriScenario(BaseScenario):
 
 
-    def __init__(self, res_gen_type, world_bound=7, agents_produce_resources=True):
+    def __init__(self, config):
         super().__init__()
-        self.visibility = 3
-        self.res_gen_type = res_gen_type
-        self.agents_produce_resouces = agents_produce_resources
-        self.world_bound = world_bound
+        self.config = config
+        self.sigma = config['sigma']
+        self.model_sigma = config['model_sigma']
+        self.visibility = config['visibility']
+        self.res_gen_type = config['res_gen_type']
+        self.agents_produce_resouces = config['agents_produce_resources']
+        self.world_bound = config['world_bound']
+        self.num_resources = config["num_resources"]
+        self.num_agents = config['num_agents']
+        self.recov_time = config['recov_time']
+        self.use_energy_resource = config['use_energy_resource']
 
 
-    def make_world(self, num_agents, materials_map, energy_locs, eating_distance):
-        world = PetriWorld(self.world_bound, eating_distance)
+    def make_world(self, materials_map, energy_locs):
+        world = PetriWorld(self.config)
+        
         # add agents
-
         world.agents = []
-        for i in range(num_agents):
-            loc = np.random.uniform(-1, 1, 2)
-            color = np.array([1., 0., 0.])
-            consumes = np.random.uniform(-1, 1, 3)
-            produces = np.random.uniform(-1, 1, 3)
-            policy = GCNPolicy(obs_dim=8, action_dim=4, sigma=0.1)
-            agent = PetriAgent(loc=loc, consumes=consumes, produces=produces, material=color, policy=policy)
-            agent.name = f'agent_{i}'
-            agent.collide = False
-            agent.silent = True
-            world.agents.append(agent)
-        world.agent_counter = num_agents
-
-        recov_time = 30
+        world.agent_counter = 0
+        for _ in range(self.num_agents):
+            self.add_random_agent(world)
 
         if self.res_gen_type == RANDOM_REC_GEN:
-            self.resource_generator = RandomResourceGenerator(world=world, recov_time=recov_time, world_bound=self.world_bound, num_resources=70)
+            self.resource_generator = RandomResourceGenerator(self.config, world=world)
             self.resource_generator.generate_initial_resources()
         elif self.res_gen_type == FIXED_REC_GEN:
-            self.resource_generator = FixedResourceGenerator(world=world, recov_time=recov_time)
+            self.resource_generator = FixedResourceGenerator(self.config, world=world)
             # add landmarks
             world.landmarks = [PetriMaterial(loc, color) for loc, color in materials_map.items()] \
                                 + [PetriEnergy(loc) for loc in energy_locs]
@@ -63,6 +59,22 @@ class PetriScenario(BaseScenario):
             raise Exception
 
         return world            
+
+    def add_random_agent(self, world):
+        loc = np.random.uniform(-1, 1, 2)
+        color = np.array([1., 0., 0.])
+        consumes = np.random.uniform(-1, 1, 3)
+        produces = np.random.uniform(-1, 1, 3)
+        policy = GCNPolicy(obs_dim=8, action_dim=4, sigma=self.model_sigma)
+        if self.use_energy_resource:
+            agent = PetriAgent(loc=loc, consumes=consumes, produces=produces, material=color, policy=policy)
+        else:
+            agent = PetriEnergyAgent(loc=loc, consumes=consumes, produces=produces, material=color, policy=policy)
+        agent.name = f'agent_{world.agent_counter}'
+        agent.collide = False
+        agent.silent = True
+        world.agents.append(agent)
+        world.agent_counter += 1
 
 
     def reset_world(self, world, np_random):
@@ -119,22 +131,26 @@ class PetriScenario(BaseScenario):
                 # If resource is eaten, the landmark is inactive
                 # and the agent can reproduce.
                 curr_agent = world.agents[min_dists_idx[i]]
-                curr_agent.can_reproduce = True
 
                 if self.agents_produce_resouces:
                     if isinstance(world.landmarks[i], PetriEnergy):
                         new_loc = np.random.uniform(-self.world_bound, self.world_bound, 2)
                         world.landmarks[i] = PetriEnergy(new_loc)
+                        curr_agent.consumed_energy = True
                     else:
-                        # TODO: Make this close to agent eventually
-                        new_loc = np.random.uniform(-self.world_bound, self.world_bound, 2)
+                        new_loc = curr_agent.state.p_pos + np.random.uniform(-0.1, 0.1, 2)
                         world.landmarks[i] = PetriMaterial(new_loc, curr_agent.produces)
+                        curr_agent.consumed_material = True
+
+                if (not self.use_energy_resource and curr_agent.consumed_material) or (curr_agent.consumed_material and curr_agent.consumed_energy):
+                    curr_agent.can_reproduce = True
+                    curr_agent.consumed_material = False 
+                    curr_agent.consumed_energy = False
 
                 world.landmarks[i].is_active = False
 
         # TODO: Maybe make this be at the beginning of the function.
         self.resource_generator.update_resources()
-
 
     def add_new_agents(self, world, parents):
         for _, agent in enumerate(parents):

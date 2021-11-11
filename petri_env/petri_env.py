@@ -1,18 +1,34 @@
 from pettingzoo.utils.conversions import parallel_wrapper_fn
 from pettingzoo.mpe._mpe_utils import rendering
-from pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv, make_env
+from pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv
 from pettingzoo.utils.agent_selector import agent_selector
 from petri_env.petri_scenario import PetriScenario
+from petri_env.petri_core import PetriAgent, PetriEnergy, PetriMaterial
+from rendering import make_square
 import numpy as np
 from gym import spaces
+from pettingzoo.utils import wrappers
+
+
+def make_env(raw_env):
+    def env(config, **kwargs):
+        env = raw_env(config, **kwargs)
+        if env.continuous_actions:
+            env = wrappers.ClipOutOfBoundsWrapper(env)
+        else:
+            env = wrappers.AssertOutOfBoundsWrapper(env)
+        env = wrappers.OrderEnforcingWrapper(env)
+        return env
+    return env
+
 
 class raw_env(SimpleEnv):
 
-    def __init__(self, res_gen_type="random", max_cycles=100000, continuous_actions=False):
-        
-        self.agent_lifetime = 70
-        eating_distance = 0.3
-        scenario = PetriScenario(res_gen_type)
+    def __init__(self, config, continuous_actions=False):
+        self.config = config
+        self.use_energy_resource = config['use_energy_resource']
+        self.agent_lifetime = config['agent_lifetime']
+        scenario = PetriScenario(config)
 
         materials_map = {(-0.5, -0.5): [0.5, 0.5, 0.5],
                          (0.5, 0.5): [0.9, 0.9, 0.9]}
@@ -23,9 +39,9 @@ class raw_env(SimpleEnv):
                         np.random.uniform(-1, 1, 2), 
                         np.random.uniform(-1, 1, 2)]
 
-        world = scenario.make_world(num_agents=30, materials_map=materials_map, energy_locs=energy_locs, eating_distance=eating_distance)
+        world = scenario.make_world(materials_map=materials_map, energy_locs=energy_locs)
 
-        super().__init__(scenario, world, max_cycles, continuous_actions)
+        super().__init__(scenario, world, config['max_cycles'], continuous_actions)
         self.metadata['name'] = "petri_env"
 
 
@@ -33,7 +49,9 @@ class raw_env(SimpleEnv):
         self.world.agents = [self.world.agents[i] for i in to_keep]
         # Added the ability for agents to die.
         self.scenario.add_new_agents(self.world, parents)
-
+        if len(self.world.agents) == 0:
+            # If ran out of agents, add new one
+            self.scenario.add_random_agent(self.world)
         self.agents = [agent.name for agent in self.world.agents]
         self._agent_selector = agent_selector(self.agents)
         self.possible_agents = self.agents[:]
@@ -49,6 +67,8 @@ class raw_env(SimpleEnv):
         for agent in self.world.agents:
             if agent.movable:
                 space_dim = self.world.dim_p * 2 + 1
+                if not self.use_energy_resource:
+                    space_dim += 4
             elif self.continuous_actions:
                 space_dim = 0
             else:
@@ -74,7 +94,9 @@ class raw_env(SimpleEnv):
 
     def _execute_world_step(self):
         # set action for each agent
-        self.scenario.consume_resources(self.world)
+        if self.use_energy_resource:
+            self.scenario.consume_resources(self.world)
+        
         to_keep = []
         parents = []
         for i, agent in enumerate(self.world.agents):
@@ -82,6 +104,7 @@ class raw_env(SimpleEnv):
             scenario_action = []
             if agent.movable:
                 mdim = self.world.dim_p * 2 + 1
+                # TODO: Check this later.
                 if self.continuous_actions:
                     scenario_action.append(action[0:mdim])
                     action = action[mdim:]
@@ -97,10 +120,11 @@ class raw_env(SimpleEnv):
                 agent.can_reproduce = False
                 parents.append(agent)
             
-            if agent.step_alive < self.agent_lifetime:
-                to_keep.append(i)
-            else:
-                print("Killing someone!")
+            if self.use_energy_resource:
+                if agent.step_alive < self.agent_lifetime:
+                    to_keep.append(i)
+                else:
+                    print("Killing someone!")
         self.world.step()
         global_reward = 0.
         if self.local_ratio is not None:
@@ -117,6 +141,58 @@ class raw_env(SimpleEnv):
 
         self.reset_agent_state(to_keep, parents=parents)
 
+    def _set_action(self, action, agent, action_space, time=None):
+        agent.action.u = np.zeros(self.world.dim_p)
+        agent.action.c = np.zeros(self.world.dim_c)
+
+        if agent.movable:
+            # physical action
+            agent.action.u = np.zeros(self.world.dim_p)
+            if self.continuous_actions:
+                # Process continuous action as in OpenAI MPE
+                agent.action.u[0] += action[0][1] - action[0][2]
+                agent.action.u[1] += action[0][3] - action[0][4]
+            else:
+                # process discrete action
+                if action[0] == 1:
+                    agent.action.u[0] = -1.0
+                if action[0] == 2:
+                    agent.action.u[0] = +1.0
+                if action[0] == 3:
+                    agent.action.u[1] = -1.0
+                if action[0] == 4:
+                    agent.action.u[1] = +1.0
+                if action[0] == 5:
+                    # Eat resource
+                    pass
+                if action[0] == 6:
+                    # Produce resource
+                    pass
+                if action[0] == 7:
+                    # Attack another agent
+                    pass
+                if action[0] == 8:
+                    # Reproduce
+                    pass
+
+            sensitivity = 5.0
+            if agent.accel is not None:
+                sensitivity = agent.accel
+            agent.action.u *= sensitivity
+            action = action[1:]
+        if not agent.silent:
+            # communication action
+            if self.continuous_actions:
+                agent.action.c = action[0]
+            else:
+                agent.action.c = np.zeros(self.world.dim_c)
+                agent.action.c[action[0]] = 1.0
+            action = action[1:]
+        # make sure we used all elements of action
+        assert len(action) == 0
+
+
+
     def observe(self, agent):
         return self.scenario.observation(self.world.agents[self._index_map[agent]], self.world)#.astype(np.float32)
 
@@ -125,7 +201,7 @@ class raw_env(SimpleEnv):
             return None
         if self.viewer is None:
             self.viewer = rendering.Viewer(900, 900)
-            self.viewer.set_max_size(6)
+            self.viewer.set_max_size(5)
 
 
         # create rendering geometry
@@ -139,7 +215,12 @@ class raw_env(SimpleEnv):
             self.render_geoms = []
             self.render_geoms_xform = []
             for entity in active_entities:
-                geom = rendering.make_circle(entity.size)
+                if isinstance(entity, PetriEnergy):
+                    geom = rendering.make_circle(entity.size)
+                elif isinstance(entity, PetriMaterial):
+                    geom = make_square(entity.size)
+                else:
+                    geom = rendering.make_circle(entity.size)
                 xform = rendering.Transform()
                 if 'agent' in entity.name:
                     geom.set_color(*entity.color[:3], alpha=0.5)

@@ -1,0 +1,10 @@
+env_config:
+  res_gen_type: random
+  max_cycles: 10000
+  agents_produce_resources: true
+  world_bound: 7
+  eating_distance: 0.3
+  num_agents: 30
+  visibility: 3
+  sigma: 0.1
+  num_resources: 50

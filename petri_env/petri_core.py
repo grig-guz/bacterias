@@ -41,6 +41,33 @@ class PetriAgent(Agent):
         self.step_alive = 0
         self.policy = policy
         self.is_active = True
+        self.consumed_material = False
+        self.consumed_energy = False
+
+    def mutate(self):
+        self.state.p_pos += np.random.uniform(-0.1, 0.1, 2)
+        self.color += np.random.uniform(-0.1, 0.1, 3)
+        self.consumes += np.random.uniform(-0.1, 0.1, 3)
+        self.produces += np.random.uniform(-0.1, 0.1, 3)
+        self.policy.mutate()
+
+class PetriEnergyAgent(Agent):
+
+    def __init__(self, config, loc, consumes, produces, material, policy=None):
+        super().__init__()
+        self.state.p_pos = np.array(loc)
+        self.consumes = np.array(consumes)
+        self.produces = np.array(produces)
+        self.color = np.array(material)
+        self.policy = policy
+        self.is_active = True
+        self.consumed_material = False
+        self.max_energy = config['max_energy']
+        self.energy_store = self.max_energy / 2
+        self.move_cost = config['move_cost']
+        self.idle_cost = config['idle_cost']
+        self.prod_cost = config['prod_cost']
+        self.reprod_cost = config['reprod_cost']
 
     def mutate(self):
         self.state.p_pos += np.random.uniform(-0.1, 0.1, 2)
@@ -50,12 +77,13 @@ class PetriAgent(Agent):
         self.policy.mutate()
 
 
+
 class PetriWorld(World):
 
-    def __init__(self, world_bound, eating_distance):
+    def __init__(self, config):
         super().__init__()
-        self.world_bound = world_bound
-        self.eating_distace = eating_distance
+        self.world_bound = config['world_bound']
+        self.eating_distace = config['eating_distance']
 
     @property
     def agent_positions(self):
