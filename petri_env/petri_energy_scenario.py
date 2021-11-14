@@ -30,6 +30,12 @@ class PetriEnergyScenario(BaseScenario):
         self.num_agents = config['num_agents']
         self.recov_time = config['recov_time']
         self.use_energy_resource = config['use_energy_resource']
+        self.action_dim = 7
+        if config["attack_action"]:
+            self.action_dim += 1
+        if config["eat_action"]:
+            self.action_dim += 1
+
 
 
     def make_world(self, materials_map, energy_locs):

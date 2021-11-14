@@ -86,24 +86,10 @@ class raw_env(SimpleEnv):
         state_dim = 0
 
         for agent in self.world.agents:
-            if agent.movable:
-                space_dim = self.world.dim_p * 2 + 1
-                if not self.use_energy_resource:
-                    space_dim += 4
-            elif self.continuous_actions:
-                space_dim = 0
-            else:
-                space_dim = 1
-            if not agent.silent:
-                if self.continuous_actions:
-                    space_dim += self.world.dim_c
-                else:
-                    space_dim *= self.world.dim_c
-
             obs_dim = len(self.scenario.observation(agent, self.world))
             state_dim += obs_dim
             if self.continuous_actions:
-                self.action_spaces[agent.name] = spaces.Box(low=0, high=1, shape=(space_dim,))
+                self.action_spaces[agent.name] = spaces.Box(low=0, high=1, shape=(9,))
             else:
                 self.action_spaces[agent.name] = spaces.Discrete(9)
             self.observation_spaces[agent.name] = spaces.Box(low=-np.float32(np.inf), high=+np.float32(np.inf), shape=(obs_dim,), dtype=np.float32)
@@ -119,41 +105,14 @@ class raw_env(SimpleEnv):
         for i, agent in enumerate(self.world.agents):
             action = self.current_actions[i]
             scenario_action = []
-            """
-            if agent.movable:
-                mdim = self.world.dim_p * 2 + 1
-                # TODO: Check this later.
-                if self.continuous_actions:
-                    scenario_action.append(action[0:mdim])
-                    action = action[mdim:]
-                else:
-                    scenario_action.append(action % mdim)
-                    action //= mdim
-            """
             scenario_action.append(action)
             if not agent.silent:
                 scenario_action.append(action)
             self._set_action(scenario_action, agent, self.world)
             agent.step_alive += 1
-            
-            #if self.use_energy_resource:
-            #    if agent.step_alive < self.agent_lifetime:
-            #        to_keep.append(i)
-            #    else:
-            #        print("Killing someone!")
         self.world.step()
-        global_reward = 0.
-        if self.local_ratio is not None:
-            global_reward = float(self.scenario.global_reward(self.world))
-
         for agent in self.world.agents:
-            agent_reward = float(self.scenario.reward(agent, self.world))
-            if self.local_ratio is not None:
-                reward = global_reward * (1 - self.local_ratio) + agent_reward * self.local_ratio
-            else:
-                reward = agent_reward
-
-            self.rewards[agent.name] = reward
+            self.rewards[agent.name] = 0
 
         self.update_world_state()
 
@@ -186,45 +145,33 @@ class raw_env(SimpleEnv):
                     agent.action.u[1] = +1.0
                     agent.move()
                 if action[0] == 5:
+                    # Reproduce
+                    agent.idle()
+                    a = self.scenario.reproduce_agent(agent, world)
+                    if a is not None:
+                        self.agents_to_add.append(a)
+                if action[0] == 6:
+                    # Produce resource
+                    # TODO: Add criterion for resource production
+                    agent.idle()
+                    self.scenario.produce_resource(agent, world)
+                if action[0] == 7:
                     # Eat resource
                     #print("eating", agent.energy_store)
                     agent.idle()
                     self.scenario.eat_resource(agent, world)                            
-                if action[0] == 6:
-                    # Produce resource
-                    # TODO: Add criterion for resource production
-                    #print("producing", agent.energy_store)
-                    agent.idle()
-                    self.scenario.produce_resource(agent, self.world)
-                if action[0] == 7:
+                if action[0] == 8:
                     # Attack another agent
                     agent.idle()
                     #print("attacking", agent.energy_store)
                     self.scenario.attack_agent(agent, world)                            
-                if action[0] == 8:
-                    # Reproduce
-                    #print("reproducing", agent.energy_store)
-                    agent.idle()
-                    a = self.scenario.reproduce_agent(agent, self.world)
-                    if a is not None:
-                        self.agents_to_add.append(a)
             sensitivity = 5.0
             if agent.accel is not None:
                 sensitivity = agent.accel
             agent.action.u *= sensitivity
             action = action[1:]
-        if not agent.silent:
-            # communication action
-            if self.continuous_actions:
-                agent.action.c = action[0]
-            else:
-                agent.action.c = np.zeros(self.world.dim_c)
-                agent.action.c[action[0]] = 1.0
-            action = action[1:]
         # make sure we used all elements of action
         assert len(action) == 0
-
-
 
     def observe(self, agent):
         return self.scenario.observation(self.world.agents[self._index_map[agent]], self.world)#.astype(np.float32)
