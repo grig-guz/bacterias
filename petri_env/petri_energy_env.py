@@ -187,7 +187,7 @@ class raw_env(SimpleEnv):
                     agent.move()
                 if action[0] == 5:
                     # Eat resource
-                    print("eating", agent.energy_store)
+                    #print("eating", agent.energy_store)
                     agent.idle()
                     self.scenario.eat_resource(agent, world)                            
                 if action[0] == 6:

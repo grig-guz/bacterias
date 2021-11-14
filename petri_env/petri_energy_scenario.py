@@ -62,7 +62,7 @@ class PetriEnergyScenario(BaseScenario):
         return world            
 
     def add_random_agent(self, world):
-        for _ in range(10):
+        for _ in range(1):
             loc = np.random.uniform(-1, 1, 2)
             color = np.array([1., 0., 0.])
             consumes = np.random.uniform(-1, 1, 3)
@@ -192,11 +192,12 @@ class PetriEnergyScenario(BaseScenario):
     def eat_resource(self, agent, world):
         a_pos = np.array([agent.state.p_pos])
         r_pos = np.array(world.resource_positions)
-        if not (len(r_pos)):
-            src_dst_dists = euclidean_distances(a_pos, r_pos)
+        if len(r_pos) > 0:
+            src_dst_dists = euclidean_distances(a_pos, r_pos)[0]
             closest_idx = np.argmin(src_dst_dists)
             closest_dist = src_dst_dists[closest_idx]
             if closest_dist < self.eating_distance:
+                print("SUCCESS RESOURCE!")
                 agent.assign_eat(closest_idx, world)
 
     def reproduce_agent(self, agent, world):
@@ -217,10 +218,10 @@ class PetriEnergyScenario(BaseScenario):
         if len(other_agents) == 0:
             return
         r_pos = np.array([a.state.p_pos for a in other_agents])
-
-        if not (len(r_pos)):
-            src_dst_dists = euclidean_distances(a_pos, r_pos)
+        if len(r_pos) > 0:
+            src_dst_dists = euclidean_distances(a_pos, r_pos)[0]
             closest_idx = np.argmin(src_dst_dists)
             closest_dist = src_dst_dists[closest_idx]
             if closest_dist < self.eating_distance:
-                agent.assign_attack(other_agents[closest_idx], world)
+                print("SUCCESS ATTACK!")
+                agent.assign_attack(other_agents[closest_idx])
