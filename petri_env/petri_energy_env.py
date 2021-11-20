@@ -21,13 +21,12 @@ def make_env(raw_env):
         return env
     return env
 
-
 class raw_env(SimpleEnv):
 
     def __init__(self, config, continuous_actions=False):
         self.config = config
         self.use_energy_resource = config['use_energy_resource']
-        self.agent_lifetime = config['agent_lifetime']
+        self.init_num_agents = config["num_agents"]
         scenario = PetriEnergyScenario(config)
 
         materials_map = {(-0.5, -0.5): [0.5, 0.5, 0.5],
@@ -43,9 +42,13 @@ class raw_env(SimpleEnv):
 
         super().__init__(scenario, world, config['max_cycles'], continuous_actions)
         self.metadata['name'] = "petri_env"
-
+        self.env_step = 0
 
     def update_world_state(self):
+
+        if not self.config['eat_action']:
+            self.scenario.consume_resources(self.world)
+
         res_to_keep = [True for _ in range(len(self.world.landmarks))]
         ag_to_keep = [True for _ in range(len(self.world.agents))]
 
@@ -64,15 +67,108 @@ class raw_env(SimpleEnv):
                 ag_to_keep[idx] = False
                 agent.attack_agent(a)
                 print("eaten an agent!")
-
+            
         self.world.landmarks = [self.world.landmarks[i] for i, to_keep in enumerate(res_to_keep) if to_keep]
-        self.world.agents = [self.world.agents[i] for i, to_keep in enumerate(ag_to_keep) if to_keep and agent.energy_store > 0] + self.agents_to_add
+        self.scenario.resource_generator.generate_initial_resources()
+        self.world.agents = [self.world.agents[i] for i, to_keep in enumerate(ag_to_keep) if to_keep and self.world.agents[i].energy_store > 0] + self.agents_to_add
         self.agents_to_add = []
+        self.env_step += 1
         # Added the ability for agents to die.
-        if len(self.world.agents) == 0:
+        if self.env_step % 5 == 0:
             # If ran out of agents, add new one
             self.scenario.add_random_agent(self.world)
 
+        self.reset_maps()
+
+
+    def _execute_world_step(self):
+        # set action for each agent
+        self.agents_to_add = []
+        for i, agent in enumerate(self.world.agents):
+            action = self.current_actions[i]
+            scenario_action = []
+            scenario_action.append(action)
+            if not agent.silent:
+                scenario_action.append(action)
+            self._set_action(scenario_action, agent, self.world)
+            agent.step_alive += 1
+        self.world.step()
+        for agent in self.world.agents:
+            self.rewards[agent.name] = 0
+
+        self.update_world_state()
+
+    def _set_action(self, action, agent, world, time=None):
+        agent.action.u = np.zeros(self.world.dim_p)
+        agent.action.c = np.zeros(self.world.dim_c)
+        if agent.movable:
+            # physical action
+            agent.action.u = np.zeros(self.world.dim_p)
+            if self.continuous_actions:
+                # Process continuous action as in OpenAI MPE
+                agent.action.u[0] += action[0][1] - action[0][2]
+                agent.action.u[1] += action[0][3] - action[0][4]
+            else:
+                action[0] += 1
+                # process discrete action
+                if action[0] == 0:
+                    #print("idle", agent.energy_store)
+                    agent.idle()
+                if action[0] == 1:
+                    agent.action.u[0] = -1.0
+                    agent.move()
+                if action[0] == 2:
+                    agent.action.u[0] = +1.0
+                    agent.move()
+                if action[0] == 3:
+                    agent.action.u[1] = -1.0
+                    agent.move()
+                if action[0] == 4:
+                    agent.action.u[1] = +1.0
+                    agent.move()
+                # Agency variations:
+                if action[0] == 5:
+                    # Reproduce
+                    agent.idle()
+                    a = self.scenario.reproduce_agent(agent, world)
+                    if a is not None:
+                        self.agents_to_add.append(a)
+                if action[0] == 6:
+                    # Produce resource
+                    agent.idle()
+                    self.scenario.produce_resource(agent, world)
+                if self.config["attack_action"] and self.config["eat_action"]:
+                    if action[0] == 7:
+                        # Eat resource
+                        agent.idle()
+                        self.scenario.eat_resource(agent, world)                            
+                    if action[0] == 8:
+                        # Attack another agent
+                        agent.idle()
+                        self.scenario.attack_agent(agent, world)
+                elif self.config["attack_action"]:
+                    if action[0] == 7:
+                        # Eat resource
+                        agent.idle()
+                        self.scenario.attack_agent(agent, world)                            
+                elif self.config["eat_action"]:
+                    if action[0] == 7:
+                        # Eat resource
+                        agent.idle()
+                        self.scenario.eat_resource(agent, world)
+
+            sensitivity = 5.0
+            if agent.accel is not None:
+                sensitivity = agent.accel
+            agent.action.u *= sensitivity
+            action = action[1:]
+        # make sure we used all elements of action
+        assert len(action) == 0
+
+    def observe(self, agent):
+        return self.scenario.observation(self.world.agents[self._index_map[agent]], self.world)#.astype(np.float32)
+
+    def reset_maps(self):
         self.agents = [agent.name for agent in self.world.agents]
         self._agent_selector = agent_selector(self.agents)
         self.possible_agents = self.agents[:]
@@ -99,82 +195,6 @@ class raw_env(SimpleEnv):
         if len(self.agents) > 0:
             self.agent_selection = self._agent_selector.reset()
 
-    def _execute_world_step(self):
-        # set action for each agent
-        self.agents_to_add = []
-        for i, agent in enumerate(self.world.agents):
-            action = self.current_actions[i]
-            scenario_action = []
-            scenario_action.append(action)
-            if not agent.silent:
-                scenario_action.append(action)
-            self._set_action(scenario_action, agent, self.world)
-            agent.step_alive += 1
-        self.world.step()
-        for agent in self.world.agents:
-            self.rewards[agent.name] = 0
-
-        self.update_world_state()
-
-    def _set_action(self, action, agent, world, time=None):
-        agent.action.u = np.zeros(self.world.dim_p)
-        agent.action.c = np.zeros(self.world.dim_c)
-
-        if agent.movable:
-            # physical action
-            agent.action.u = np.zeros(self.world.dim_p)
-            if self.continuous_actions:
-                # Process continuous action as in OpenAI MPE
-                agent.action.u[0] += action[0][1] - action[0][2]
-                agent.action.u[1] += action[0][3] - action[0][4]
-            else:
-                # process discrete action
-                if action[0] == 0:
-                    #print("idle", agent.energy_store)
-                    agent.idle()
-                if action[0] == 1:
-                    agent.action.u[0] = -1.0
-                    agent.move()
-                if action[0] == 2:
-                    agent.action.u[0] = +1.0
-                    agent.move()
-                if action[0] == 3:
-                    agent.action.u[1] = -1.0
-                    agent.move()
-                if action[0] == 4:
-                    agent.action.u[1] = +1.0
-                    agent.move()
-                if action[0] == 5:
-                    # Reproduce
-                    agent.idle()
-                    a = self.scenario.reproduce_agent(agent, world)
-                    if a is not None:
-                        self.agents_to_add.append(a)
-                if action[0] == 6:
-                    # Produce resource
-                    # TODO: Add criterion for resource production
-                    agent.idle()
-                    self.scenario.produce_resource(agent, world)
-                if action[0] == 7:
-                    # Eat resource
-                    #print("eating", agent.energy_store)
-                    agent.idle()
-                    self.scenario.eat_resource(agent, world)                            
-                if action[0] == 8:
-                    # Attack another agent
-                    agent.idle()
-                    #print("attacking", agent.energy_store)
-                    self.scenario.attack_agent(agent, world)                            
-            sensitivity = 5.0
-            if agent.accel is not None:
-                sensitivity = agent.accel
-            agent.action.u *= sensitivity
-            action = action[1:]
-        # make sure we used all elements of action
-        assert len(action) == 0
-
-    def observe(self, agent):
-        return self.scenario.observation(self.world.agents[self._index_map[agent]], self.world)#.astype(np.float32)
 
     def render(self, mode='human'):
         if not self.world.entities:

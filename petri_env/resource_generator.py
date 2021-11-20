@@ -37,7 +37,8 @@ class RandomResourceGenerator(ResourceGenerator):
                 # Energy
                 new_resource = PetriEnergy(loc)
             else:
-                color = np.random.uniform(0, 1, 3)
+                #color = np.random.uniform(0, 1, 3)
+                color = np.array([1., 0., 0.])
                 new_resource = PetriMaterial(loc, color)
 
             self.world.landmarks.append(new_resource)
@@ -45,7 +46,7 @@ class RandomResourceGenerator(ResourceGenerator):
 
     def activate_resource(self, resource):
         new_loc = np.random.uniform(-self.world_bound, self.world_bound, 2)
-        resource.loc = new_loc
+        resource.state.p_pos = new_loc
         resource.is_active = True
         resource.inactive_count = 0
 

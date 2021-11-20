@@ -15,7 +15,6 @@ FIXED_REC_GEN = "fixed"
 
 class PetriEnergyScenario(BaseScenario):
 
-
     def __init__(self, config):
         super().__init__()
         self.config = config
@@ -30,11 +29,14 @@ class PetriEnergyScenario(BaseScenario):
         self.num_agents = config['num_agents']
         self.recov_time = config['recov_time']
         self.use_energy_resource = config['use_energy_resource']
-        self.action_dim = 7
+        self.action_dim = 6
+        self.max_energy = config['max_energy']
         if config["attack_action"]:
             self.action_dim += 1
         if config["eat_action"]:
             self.action_dim += 1
+
+        self.novelty_buffer = []
 
 
 
@@ -65,21 +67,24 @@ class PetriEnergyScenario(BaseScenario):
             print("Unknown resource generator type")
             raise Exception
 
+
         return world            
 
     def add_random_agent(self, world):
         for _ in range(1):
-            loc = np.random.uniform(-1, 1, 2)
+            loc = np.random.uniform(-self.world_bound, self.world_bound, 2)
             color = np.array([1., 0., 0.])
-            consumes = np.random.uniform(-1, 1, 3)
-            produces = np.random.uniform(-1, 1, 3)
-            policy = GCNPolicy(obs_dim=8, action_dim=4, sigma=self.model_sigma)
+            #consumes = np.random.uniform(0, 1, 3)
+            #produces = np.random.uniform(0, 1, 3)
+            consumes = np.array([1., 0., 0.])
+            produces = np.array([1., 0., 0.])
+            policy = GCNPolicy(obs_dim=8, action_dim=self.action_dim, sigma=self.model_sigma)
             if self.use_energy_resource:
                 agent = PetriAgent(loc=loc, consumes=consumes, produces=produces, material=color, policy=policy)
-                agent.state.p_vel = np.zeros(2)
             else:
                 agent = PetriEnergyAgent(self.config, loc=loc, consumes=consumes, produces=produces, material=color, policy=policy)
-                agent.state.p_vel = np.zeros(2)
+
+            agent.state.p_vel = np.zeros(2)
             agent.name = f'agent_{world.agent_counter}'
             agent.collide = False
             agent.silent = True
@@ -88,18 +93,18 @@ class PetriEnergyScenario(BaseScenario):
 
 
     def reset_world(self, world, np_random):
-
+        pass
+        """
         for agent in world.agents:
-            agent.state.p_pos = np_random.uniform(-1, +1, world.dim_p)
+            agent.state.p_pos = np_random.uniform(-self.world_bound, self.world_bound, world.dim_p)
             agent.state.p_vel = np.zeros(world.dim_p)
             agent.state.c = np.zeros(world.dim_c)
         for _, landmark in enumerate(world.landmarks):
             landmark.state.p_vel = np.zeros(world.dim_p)
-
+        """
 
     def reward(self, agent, world):
         return 0
-
 
     def observation(self, agent, world):
         # GCN observation
@@ -121,47 +126,12 @@ class PetriEnergyScenario(BaseScenario):
             
         return [np.array(agents_states), 
                 np.array(landmark_states), 
-                np.concatenate([agent.state.p_pos, agent.state.p_vel, agent.color, agent.consumes, agent.produces])]
-
-
-    def consume_resources(self, world):
-        a_pos = np.array(world.agent_positions)
-        r_pos = np.array(world.resource_positions)
-
-        if len(r_pos) == 0 or len(a_pos) == 0:
-            return
-
-        to_remain, min_dists_idx = dist_util(r_pos, a_pos, world.eating_distace)
-
-        if (to_remain == False).any():
-            print("Removing!")
-        
-        for i, val in enumerate(to_remain):
-            if not val and world.landmarks[i].is_active:
-                # If resource is eaten, the landmark is inactive
-                # and the agent can reproduce.
-                curr_agent = world.agents[min_dists_idx[i]]
-
-                if self.agents_produce_resouces:
-                    if isinstance(world.landmarks[i], PetriEnergy):
-                        new_loc = np.random.uniform(-self.world_bound, self.world_bound, 2)
-                        world.landmarks[i] = PetriEnergy(new_loc)
-                        curr_agent.consumed_energy = True
-                    else:
-                        new_loc = curr_agent.state.p_pos + np.random.uniform(-0.1, 0.1, 2)
-                        world.landmarks[i] = PetriMaterial(new_loc, curr_agent.produces)
-                        curr_agent.consumed_material = True
-
-                if (not self.use_energy_resource and curr_agent.consumed_material) or (curr_agent.consumed_material and curr_agent.consumed_energy):
-                    curr_agent.can_reproduce = True
-                    curr_agent.consumed_material = False 
-                    curr_agent.consumed_energy = False
-
-                world.landmarks[i].is_active = False
-
-        # TODO: Maybe make this be at the beginning of the function.
-        self.resource_generator.update_resources()
-
+                np.concatenate([agent.state.p_pos, 
+                        agent.state.p_vel, 
+                        np.array([agent.energy_store]) / self.max_energy, 
+                        agent.color, 
+                        agent.consumes, 
+                        agent.produces])]
 
     def get_features(self, agent, entity_list, entity_dist_list, feat_func):
         acc = []
@@ -180,7 +150,6 @@ class PetriEnergyScenario(BaseScenario):
         consumes = agent1.consumes
         produces = agent1.produces
         return np.concatenate([dist_diff, vel, color, consumes, produces])
-
 
     def get_landmark_features(self, landmark, agent):
         dist_diff = landmark.state.p_pos - agent.state.p_pos
@@ -231,3 +200,32 @@ class PetriEnergyScenario(BaseScenario):
             if closest_dist < self.eating_distance:
                 print("SUCCESS ATTACK!")
                 agent.assign_attack(other_agents[closest_idx])
+
+    def consume_resources(self, world):
+        a_pos = np.array(world.agent_positions)
+        r_pos = np.array(world.resource_positions)
+
+        if len(r_pos) == 0 or len(a_pos) == 0:
+            return
+
+        to_remain, min_dists_idx = dist_util(r_pos, a_pos, world.eating_distace)
+        
+        for i, val in enumerate(to_remain):
+            if not val and world.landmarks[i].is_active:
+                # If resource is eaten, the landmark becomes inactive (recovery)
+                curr_agent = world.agents[min_dists_idx[i]]
+                curr_agent.eat(world.landmarks[i])
+                world.landmarks[i].is_active = False
+            """
+            if curr_agent.reproduce():
+                new_agent = copy.deepcopy(curr_agent)
+                new_agent.mutate()
+                new_agent.step_alive = 0
+                new_agent.name = f'agent_{world.agent_counter}'
+                world.agent_counter += 1
+                new_agent.state.p_vel = np.zeros(world.dim_p)
+                new_agent.state.c = np.zeros(world.dim_c)
+            """
+        self.resource_generator.update_resources()
+
+

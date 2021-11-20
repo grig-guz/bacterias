@@ -29,6 +29,7 @@ class PetriScenario(BaseScenario):
         self.num_agents = config['num_agents']
         self.recov_time = config['recov_time']
         self.use_energy_resource = config['use_energy_resource']
+        
 
 
     def make_world(self, materials_map, energy_locs):
@@ -90,6 +91,27 @@ class PetriScenario(BaseScenario):
     def reward(self, agent, world):
         return 0
 
+    def observation(self, agent, world):
+        # GCN observation
+        # get positions of all entities in this agent's reference frame
+        entity_pos = []
+        for landmark in world.landmarks:
+            entity_pos.append(landmark.state.p_pos - agent.state.p_pos)
+
+        landmark_positions = world.active_resource_positions
+        agent_positions = world.agent_positions
+
+        agents_states = []
+        if len(agent_positions) > 0:
+            agents_states = self.get_features(agent, world.agents, agent_positions, self.get_agent_features)
+
+        landmark_states = []
+        if len(landmark_positions) > 0:
+            landmark_states = self.get_features(agent, world.active_resources, landmark_positions, self.get_landmark_features)
+            
+        return [np.array(agents_states), 
+                np.array(landmark_states), 
+                np.concatenate([agent.state.p_pos, agent.state.p_vel, agent.color, agent.consumes, agent.produces])]
 
     def observation(self, agent, world):
         # GCN observation
@@ -112,6 +134,7 @@ class PetriScenario(BaseScenario):
         return [np.array(agents_states), 
                 np.array(landmark_states), 
                 np.concatenate([agent.state.p_pos, agent.state.p_vel, agent.color, agent.consumes, agent.produces])]
+
 
 
     def consume_resources(self, world):

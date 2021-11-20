@@ -1,3 +1,4 @@
+from numpy import concatenate
 from pettingzoo.utils.agent_selector import agent_selector
 import torch
 from torch import nn
@@ -38,8 +39,7 @@ class GCNPolicy(PetriPolicy):
         self.landmarks_linear = nn.Linear(6, 32)
         self.agg_agents_linear = nn.Linear(32, 32)
         self.agg_landmarks_linear = nn.Linear(32, 32)
-        self.c_agent_linear = nn.Linear(13, 32)
-
+        self.c_agent_linear = nn.Linear(14, 32)
         self.final_linear = nn.Linear(96, action_dim)
 
 

@@ -18,7 +18,7 @@ class PetriEnergy(PetriLandmark):
         self.resource_type = "energy"
         self.state.p_pos = loc
         self.is_active = True
-        self.color = np.array([1, 1, 0])
+        self.color = np.array([255, 255, 0])
 
 
 class PetriMaterial(PetriLandmark):
@@ -46,10 +46,17 @@ class PetriAgent(Agent):
         self.consumed_energy = False
 
     def mutate(self):
-        self.state.p_pos += np.random.uniform(-0.1, 0.1, 2)
-        self.color += np.random.uniform(-0.1, 0.1, 3)
-        self.consumes += np.random.uniform(-0.1, 0.1, 3)
-        self.produces += np.random.uniform(-0.1, 0.1, 3)
+        self.color += np.random.uniform(-0.05, 0.05, 3)
+        self.consumes += np.random.uniform(-0.05, 0.05, 3)
+        self.produces += np.random.uniform(-0.05, 0.05, 3)
+
+        self.color[self.color < 0] = 0
+        self.color[self.color > 1] = 1
+        self.consumes[self.consumes < 0] = 0
+        self.consumes[self.consumes > 1] = 1
+        self.produces[self.produces < 0] = 0
+        self.produces[self.produces > 1] = 1
+
         self.policy.mutate()
 
 class PetriEnergyAgent(PetriAgent):
@@ -64,13 +71,6 @@ class PetriEnergyAgent(PetriAgent):
         self.reprod_cost = config['reprod_cost']
         self.currently_eating = None
         self.currently_attacking = None
-
-    def mutate(self):
-        self.state.p_pos += np.random.uniform(-0.1, 0.1, 2)
-        self.color += np.random.uniform(-0.1, 0.1, 3)
-        self.consumes += np.random.uniform(-0.1, 0.1, 3)
-        self.produces += np.random.uniform(-0.1, 0.1, 3)
-        self.policy.mutate()
 
     def can_produce_resource(self):
         if self.energy_store - self.prod_cost > 0:
@@ -89,8 +89,11 @@ class PetriEnergyAgent(PetriAgent):
         self.currently_eating = world.landmarks[idx]
 
     def eat(self, landmark):
-        # TODO: Fix this stuff
-        self.energy_store = min(self.max_energy, self.energy_store + 300)
+        dist = np.sum(np.square(self.consumes - landmark.color))
+        # Maximum distance is 3 since all colors entries are within [0, 1]
+        # Highest energy it can consume is max_energy / 2
+        new_energy = (3 - dist) / 3 * self.max_energy / 2
+        self.energy_store = min(self.max_energy, self.energy_store + new_energy)
 
     def reproduce(self):
         if self.energy_store - self.reprod_cost > 0:
