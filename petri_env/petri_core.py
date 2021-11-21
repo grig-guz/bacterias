@@ -64,13 +64,15 @@ class PetriEnergyAgent(PetriAgent):
     def __init__(self, config, loc, consumes, produces, material, policy=None):
         super().__init__(config, loc, consumes, produces, material, policy=policy)
         self.max_energy = config['max_energy']
-        self.energy_store = self.max_energy / 2
+        self.energy_store = self.max_energy / 3
         self.move_cost = config['move_cost']
         self.idle_cost = config['idle_cost']
         self.prod_cost = config['prod_cost']
         self.reprod_cost = config['reprod_cost']
+        self.attack_cost = config['attack_cost']
         self.currently_eating = None
         self.currently_attacking = None
+        self.lineage_length = 1
 
     def can_produce_resource(self):
         if self.energy_store - self.prod_cost > 0:
@@ -89,10 +91,10 @@ class PetriEnergyAgent(PetriAgent):
         self.currently_eating = world.landmarks[idx]
 
     def eat(self, landmark):
-        dist = np.sum(np.square(self.consumes - landmark.color))
+        dist = np.sum(np.abs(self.consumes - landmark.color))
         # Maximum distance is 3 since all colors entries are within [0, 1]
         # Highest energy it can consume is max_energy / 2
-        new_energy = (3 - dist) / 3 * self.max_energy / 2
+        new_energy = (3 - dist) / 3 * self.max_energy
         self.energy_store = min(self.max_energy, self.energy_store + new_energy)
 
     def reproduce(self):
@@ -102,12 +104,24 @@ class PetriEnergyAgent(PetriAgent):
         else:
             return False
 
+    def attack(self):
+        if self.energy_store - self.attack_cost < 0:
+            self.energy_store -= self.attack_cost
+            return True
+        else:
+            self.idle()
+            return False
+
     def assign_attack(self, agent):
         self.currently_attacking = agent
 
     def attack_agent(self, ag):
-        # TODO: Fix this stuff
-        self.energy_store = min(self.max_energy, self.energy_store + 300)
+        dist = np.sum(np.square(self.consumes - ag.color))
+        # Maximum distance is 3 since all colors entries are within [0, 1]
+        # Highest energy it can consume is max_energy / 2
+        new_energy = (3 - dist) / 3 * self.max_energy / 2
+        self.energy_store = min(self.max_energy, self.energy_store + new_energy)
+
 
 class PetriWorld(World):
 
@@ -132,6 +146,10 @@ class PetriWorld(World):
     def resource_positions(self):
         return [resource.state.p_pos for resource in self.landmarks]
 
+    def calculate_distances(self):
+        self.agent_res_distances = euclidean_distances(self.agent_positions, self.resource_positions)
+        self.agent_agent_distances = euclidean_distances(self.agent_positions, self.agent_positions)
+        np.fill_diagonal(self.agent_agent_distances, np.inf)
 
     # update state of the world
     def step(self):
@@ -161,7 +179,9 @@ class PetriWorld(World):
                 speed = np.sqrt(np.square(entity.state.p_vel[0]) + np.square(entity.state.p_vel[1]))
                 if speed > entity.max_speed:
                     entity.state.p_vel = entity.state.p_vel / np.sqrt(np.square(entity.state.p_vel[0]) + np.square(entity.state.p_vel[1])) * entity.max_speed
+
             entity.state.p_pos += entity.state.p_vel * self.dt
+            """
             if entity.state.p_pos[0] > self.world_bound:
                 entity.state.p_pos[0] = -self.world_bound
             elif entity.state.p_pos[0] < -self.world_bound:
@@ -171,4 +191,19 @@ class PetriWorld(World):
                 entity.state.p_pos[1] = -self.world_bound
             elif entity.state.p_pos[1] < -self.world_bound:
                 entity.state.p_pos[1] = self.world_bound
-    
+            """
+            
+            if entity.state.p_pos[0] > self.world_bound:
+                entity.state.p_pos[0] = self.world_bound
+                entity.energy_store = -1
+            elif entity.state.p_pos[0] < -self.world_bound:
+                entity.state.p_pos[0] = -self.world_bound
+                entity.energy_store = -1
+
+            if entity.state.p_pos[1] > self.world_bound:
+                entity.state.p_pos[1] = self.world_bound
+                entity.energy_store = -1
+            elif entity.state.p_pos[1] < -self.world_bound:
+                entity.state.p_pos[1] = -self.world_bound
+                entity.energy_store = -1
+            

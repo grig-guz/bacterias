@@ -1,13 +1,14 @@
 import random
 import math
 import numpy as np
+import torch
 from pettingzoo.mpe._mpe_utils.rendering import FilledPolygon, PolyLine
 
 def collect_render_results(env, mode):
     results = []
 
     env.reset()
-    for i in range(100000):
+    for i in range(1000000):
         if i > 0:
             for agent in env.agent_iter(env.num_agents // 2 + 1):
                 obs, reward, done, info = env.last()
@@ -17,7 +18,8 @@ def collect_render_results(env, mode):
                     action = random.choice(np.flatnonzero(obs['action_mask']))
                 else:
                     unwrapped = env.unwrapped
-                    action = unwrapped.world.agents[unwrapped._index_map[agent]].policy(obs)
+                    with torch.no_grad():
+                        action = unwrapped.world.agents[unwrapped._index_map[agent]].policy(obs)
                 env.step(action)
         render_result = env.render(mode=mode)
         results.append(render_result)

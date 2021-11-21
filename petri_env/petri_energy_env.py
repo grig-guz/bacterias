@@ -1,3 +1,4 @@
+import random
 from pettingzoo.utils.conversions import parallel_wrapper_fn
 from pettingzoo.mpe._mpe_utils import rendering
 from pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv
@@ -9,6 +10,8 @@ import numpy as np
 from gym import spaces
 from pettingzoo.utils import wrappers
 from utils import *
+from random import sample
+import copy
 
 def make_env(raw_env):
     def env(config, **kwargs):
@@ -26,7 +29,7 @@ class raw_env(SimpleEnv):
     def __init__(self, config, continuous_actions=False):
         self.config = config
         self.use_energy_resource = config['use_energy_resource']
-        self.init_num_agents = config["num_agents"]
+        self.init_num_agents = config["max_n_agents"]
         scenario = PetriEnergyScenario(config)
 
         materials_map = {(-0.5, -0.5): [0.5, 0.5, 0.5],
@@ -39,7 +42,7 @@ class raw_env(SimpleEnv):
                         np.random.uniform(-1, 1, 2)]
 
         world = scenario.make_world(materials_map=materials_map, energy_locs=energy_locs)
-
+        self.reproducible_agents = []
         super().__init__(scenario, world, config['max_cycles'], continuous_actions)
         self.metadata['name'] = "petri_env"
         self.env_step = 0
@@ -59,14 +62,12 @@ class raw_env(SimpleEnv):
                 idx = self.world.landmarks.index(landmark)
                 res_to_keep[idx] = False
                 agent.eat(landmark)
-                print("eaten a resource!")
             elif agent.currently_attacking is not None:
                 a = agent.currently_attacking
                 agent.currently_attacking = None
                 idx = self.world.agents.index(a)
                 ag_to_keep[idx] = False
                 agent.attack_agent(a)
-                print("eaten an agent!")
             
         self.world.landmarks = [self.world.landmarks[i] for i, to_keep in enumerate(res_to_keep) if to_keep]
         self.scenario.resource_generator.generate_initial_resources()
@@ -74,10 +75,15 @@ class raw_env(SimpleEnv):
         self.agents_to_add = []
         self.env_step += 1
         # Added the ability for agents to die.
-        if self.env_step % 5 == 0:
+        if self.env_step % 5 == 0 and len(self.agents) < self.init_num_agents:
             # If ran out of agents, add new one
-            self.scenario.add_random_agent(self.world)
+            if self.reproducible_agents == []:
+                repr_agent = None
+            else:
+                repr_agent = random.sample(self.reproducible_agents, 1)[0]
+            self.scenario.add_random_agent(self.world, repr_agent=repr_agent)
 
+        self.world.calculate_distances()
         self.reset_maps()
 
 
@@ -133,29 +139,28 @@ class raw_env(SimpleEnv):
                     a = self.scenario.reproduce_agent(agent, world)
                     if a is not None:
                         self.agents_to_add.append(a)
-                if action[0] == 6:
-                    # Produce resource
-                    agent.idle()
-                    self.scenario.produce_resource(agent, world)
-                if self.config["attack_action"] and self.config["eat_action"]:
-                    if action[0] == 7:
+                        saved_ag = copy.deepcopy(agent)
+                        saved_ag.lineage_length = 1
+                        self.reproducible_agents.append(saved_ag)
+                        self.reproducible_agents = self.reproducible_agents[-50:]
+                act_id = 5
+                if self.config["produce_res_action"]:
+                    act_id += 1
+                    if action[0] == act_id:
+                        # Produce resource
+                        agent.idle()
+                        self.scenario.produce_resource(agent, world)
+                if self.config["eat_action"]:
+                    act_id += 1
+                    if action[0] == act_id:
                         # Eat resource
                         agent.idle()
                         self.scenario.eat_resource(agent, world)                            
-                    if action[0] == 8:
-                        # Attack another agent
-                        agent.idle()
-                        self.scenario.attack_agent(agent, world)
-                elif self.config["attack_action"]:
-                    if action[0] == 7:
+                if self.config["attack_action"]:
+                    act_id += 1
+                    if action[0] == act_id:
                         # Eat resource
-                        agent.idle()
                         self.scenario.attack_agent(agent, world)                            
-                elif self.config["eat_action"]:
-                    if action[0] == 7:
-                        # Eat resource
-                        agent.idle()
-                        self.scenario.eat_resource(agent, world)
 
             sensitivity = 5.0
             if agent.accel is not None:
