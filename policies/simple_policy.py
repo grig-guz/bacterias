@@ -83,7 +83,8 @@ class GCNLSTMPolicy(PetriPolicy):
         self.agg_agents_linear = nn.Linear(32, 32)
         self.agg_landmarks_linear = nn.Linear(32, 32)
         self.c_agent_linear = nn.Linear(18, 32)
-        self.final_linear = nn.Linear(96, action_dim)
+        self.final_linear_mov = nn.Linear(96, 4)
+        self.final_linear_inter = nn.Linear(96, action_dim)
         self.lstm = nn.LSTMCell(96, 96)
         self.hx = torch.zeros(1, 96)
         self.cx = torch.zeros(1, 96)
@@ -108,15 +109,20 @@ class GCNLSTMPolicy(PetriPolicy):
 
         obs = torch.cat([agents_obs, landmarks_obs, c_agent_obs])
         self.hx, self.cx = self.lstm(obs.unsqueeze(0), (self.hx, self.cx))
-        act = self.final_linear(obs)
-
-        return int(torch.argmax(act))
+        act_mov = self.final_linear_mov(obs)
+        act_inter = self.final_linear_inter(obs)
+        return int(torch.argmax(act_mov)), int(torch.argmax(act_inter))
 
     def agg_func(self, inpt, inner_layer, outer_layer):
         inpt = self.relu(inner_layer(inpt))
         inpt = torch.mean(inpt, dim=0)
         inpt = self.relu(outer_layer(inpt))
         return inpt
+
+    def mutate(self):
+        super().mutate()
+        self.hx = torch.zeros(1, 96)
+        self.cx = torch.zeros(1, 96)
 
 class CNNLSTMPolicy(PetriPolicy):
 

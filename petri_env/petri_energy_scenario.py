@@ -30,7 +30,7 @@ class PetriEnergyScenario(BaseScenario):
         self.num_agents = config['num_agents']
         self.recov_time = config['recov_time']
         self.use_energy_resource = config['use_energy_resource']
-        self.action_dim = 5
+        self.action_dim = 1
         self.max_energy = config['max_energy']
         if config["attack_action"]:
             self.action_dim += 1
@@ -178,7 +178,7 @@ class PetriEnergyScenario(BaseScenario):
         return acc
 
     def get_agent_features(self, agent1, agent2):
-        dist_diff = agent1.state.p_pos / self.world_bound
+        dist_diff = (agent1.state.p_pos - agent2.state.p_pos)/ self.world_bound
         vel = agent1.state.p_vel
         color = agent1.color
         consumes = agent1.consumes
@@ -186,7 +186,7 @@ class PetriEnergyScenario(BaseScenario):
         return np.concatenate([dist_diff, vel, color, consumes, produces])
 
     def get_landmark_features(self, landmark, agent):
-        dist_diff = landmark.state.p_pos / self.world_bound
+        dist_diff = (landmark.state.p_pos -  agent.state.p_pos) / self.world_bound
         color = landmark.color
         return np.concatenate([dist_diff, color])
 

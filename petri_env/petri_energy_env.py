@@ -109,31 +109,32 @@ class raw_env(SimpleEnv):
         agent.action.c = np.zeros(self.world.dim_c)
         if agent.movable:
             # physical action
+            move_act, interact_act = action[0]
             agent.action.u = np.zeros(self.world.dim_p)
             if self.continuous_actions:
                 # Process continuous action as in OpenAI MPE
                 agent.action.u[0] += action[0][1] - action[0][2]
                 agent.action.u[1] += action[0][3] - action[0][4]
             else:
-                action[0] += 1
                 # process discrete action
-                if action[0] == 0:
+                #if move_act == 0:
                     #print("idle", agent.energy_store)
-                    agent.idle()
-                if action[0] == 1:
+                #    agent.idle()
+                if move_act == 0:
                     agent.action.u[0] = -1.0
                     agent.move()
-                if action[0] == 2:
+                if move_act == 1:
                     agent.action.u[0] = +1.0
                     agent.move()
-                if action[0] == 3:
+                if move_act == 2:
                     agent.action.u[1] = -1.0
                     agent.move()
-                if action[0] == 4:
+                if move_act == 3:
                     agent.action.u[1] = +1.0
                     agent.move()
+                
                 # Agency variations:
-                if action[0] == 5:
+                if interact_act == 0:
                     # Reproduce
                     agent.idle()
                     a = self.scenario.reproduce_agent(agent, world)
@@ -143,22 +144,22 @@ class raw_env(SimpleEnv):
                         saved_ag.lineage_length = 1
                         self.reproducible_agents.append(saved_ag)
                         self.reproducible_agents = self.reproducible_agents[-50:]
-                act_id = 5
+                act_id = 0
                 if self.config["produce_res_action"]:
                     act_id += 1
-                    if action[0] == act_id:
+                    if interact_act == act_id:
                         # Produce resource
                         agent.idle()
                         self.scenario.produce_resource(agent, world)
                 if self.config["eat_action"]:
                     act_id += 1
-                    if action[0] == act_id:
+                    if interact_act == act_id:
                         # Eat resource
                         agent.idle()
                         self.scenario.eat_resource(agent, world)                            
                 if self.config["attack_action"]:
                     act_id += 1
-                    if action[0] == act_id:
+                    if interact_act == act_id:
                         # Eat resource
                         self.scenario.attack_agent(agent, world)                            
 

@@ -195,15 +195,15 @@ class PetriWorld(World):
             
             if entity.state.p_pos[0] > self.world_bound:
                 entity.state.p_pos[0] = self.world_bound
-                entity.energy_store = -1
+                #entity.energy_store = -1
             elif entity.state.p_pos[0] < -self.world_bound:
                 entity.state.p_pos[0] = -self.world_bound
-                entity.energy_store = -1
+                #entity.energy_store = -1
 
             if entity.state.p_pos[1] > self.world_bound:
                 entity.state.p_pos[1] = self.world_bound
-                entity.energy_store = -1
+                #entity.energy_store = -1
             elif entity.state.p_pos[1] < -self.world_bound:
                 entity.state.p_pos[1] = -self.world_bound
-                entity.energy_store = -1
+                #entity.energy_store = -1
             

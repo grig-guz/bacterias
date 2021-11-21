@@ -5,22 +5,22 @@ env_config:
   world_bound: 3
   eating_distance: 0.2
   num_agents: 1
-  visibility: 1
+  visibility: 2
   sigma: 0.2
   model_sigma: 0.02
-  num_resources: 80
+  num_resources: 50
   recov_time: 50
   agent_lifetime: 125
-  max_n_agents: 30
+  max_n_agents: 5
   
   use_energy_resource: False
   move_cost: 5
-  max_energy: 1500
+  max_energy: 2400
   prod_cost: 250
-  reprod_cost: 500
+  reprod_cost: 800
   idle_cost: 2
   attack_cost: 50
-  attack_action: True
+  attack_action: False
   eat_action: True
   produce_res_action: False
   novelty_buffer_size: 10
