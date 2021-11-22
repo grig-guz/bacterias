@@ -132,10 +132,6 @@ class PetriWorld(World):
         self.eating_distace = config['eating_distance']
 
     @property
-    def agent_positions(self):
-        return [agent.state.p_pos for agent in self.agents]
-
-    @property
     def active_resource_positions(self):
         return [resource.state.p_pos for resource in self.landmarks if resource.is_active]
 
@@ -147,11 +143,53 @@ class PetriWorld(World):
     def resource_positions(self):
         return [resource.state.p_pos for resource in self.landmarks]
 
+    @property
+    def agent_positions(self):
+        return [agent.state.p_pos for agent in self.agents]
+
     def calculate_distances(self):
         self.agent_res_distances = euclidean_distances(self.agent_positions, self.active_resource_positions)
         self.agent_agent_distances = euclidean_distances(self.agent_positions, self.agent_positions)
         np.fill_diagonal(self.agent_agent_distances, np.inf)
 
+        agent_positions, agent_velocities, all_consumes, all_produces, all_a_colors = [], [], [], [], []
+        
+        for agent in self.agents:
+            agent_positions.append(agent.state.p_pos)
+            agent_velocities.append(agent.state.p_vel)
+            all_consumes.append(agent.consumes)
+            all_produces.append(agent.produces)
+            all_a_colors.append(agent.color)
+
+        agent_positions = np.array(agent_positions) / self.world_bound
+        agent_velocities = np.array(agent_velocities)
+        all_consumes = np.array(all_consumes)
+        all_produces = np.array(all_produces)
+        all_a_colors = np.array(all_a_colors)
+
+        landmark_positions, landmark_colors = [], []
+        for landmark in self.active_resources:
+            landmark_positions.append(landmark.state.p_pos)
+            landmark_colors.append(landmark.color)
+        
+        landmark_positions = np.array(landmark_positions) / self.world_bound
+        landmark_colors = np.array(landmark_colors)
+
+        agent_landmark_dists = np.expand_dims(agent_positions, 1) - landmark_positions
+        self.agent_landmark_feats = np.concatenate([agent_landmark_dists, 
+                                                        np.tile(landmark_colors, (agent_positions.shape[0], 1, 1))], 
+                                                    axis=2)
+
+        agent_agent_dists = np.expand_dims(agent_positions, 1) - agent_positions
+        
+        self.agent_agent_feats = np.concatenate([agent_agent_dists, 
+                                                        np.tile(agent_velocities, (agent_velocities.shape[0], 1, 1)),
+                                                        np.tile(all_consumes, (all_consumes.shape[0], 1, 1)),
+                                                        np.tile(all_produces, (all_produces.shape[0], 1, 1)),
+                                                        np.tile(all_a_colors, (all_a_colors.shape[0], 1, 1))], 
+                                                    axis=2)
+        print(self.agent_agent_feats.shape)
+        
     # update state of the world
     def step(self):
         # set actions for scripted agents

@@ -143,20 +143,13 @@ class PetriEnergyScenario(BaseScenario):
     def observation(self, agent, world):
         # GCN observation
         # get positions of all entities in this agent's reference frame
-        landmarks = world.landmarks
-        agents = world.agents
         agent_id = world.agents.index(agent)
 
-        agents_states = []
-        if len(agents) > 0:
-            agents_states = self.get_features(agent, agent_id, agents, world.agent_agent_distances, self.get_agent_features)
-
-        landmark_states = []
-        if len(landmarks) > 0:
-            landmark_states = self.get_features(agent, agent_id, landmarks, world.agent_res_distances, self.get_landmark_features)
-
-        return [np.array(agents_states), 
-                np.array(landmark_states), 
+        agent_features = world.agent_agent_feats[agent_id]
+        landmark_features = world.agent_landmark_feats[agent_id]
+        
+        return [agent_features, 
+                landmark_features, 
                 np.concatenate([agent.state.p_pos / self.world_bound, 
                         agent.state.p_vel, 
                         np.array([self.world_bound - agent.state.p_pos[0],
@@ -167,28 +160,6 @@ class PetriEnergyScenario(BaseScenario):
                         agent.color, 
                         agent.consumes, 
                         agent.produces])]
-
-    def get_features(self, agent, agent_id, entity_list, distances, feat_func):
-
-        acc = []
-        selected_list = distances[agent_id] < self.visibility
-        for i, selected in enumerate(selected_list):
-            if selected and agent != entity_list[i]:
-                acc.append(feat_func(entity_list[i], agent))
-        return acc
-
-    def get_agent_features(self, agent1, agent2):
-        dist_diff = (agent1.state.p_pos - agent2.state.p_pos)/ self.world_bound
-        vel = agent1.state.p_vel
-        color = agent1.color
-        consumes = agent1.consumes
-        produces = agent1.produces
-        return np.concatenate([dist_diff, vel, color, consumes, produces])
-
-    def get_landmark_features(self, landmark, agent):
-        dist_diff = (landmark.state.p_pos -  agent.state.p_pos) / self.world_bound
-        color = landmark.color
-        return np.concatenate([dist_diff, color])
 
     def produce_resource(self, agent, world):
         if agent.can_produce_resource():
@@ -236,31 +207,3 @@ class PetriEnergyScenario(BaseScenario):
                 if closest_dist < self.eating_distance:
                     print("SUCCESSFUL EATING!")
                     agent.assign_attack(other_agents[closest_idx])
-
-    def consume_resources(self, world):
-        a_pos = np.array(world.agent_positions)
-        r_pos = np.array(world.resource_positions)
-
-        if len(r_pos) == 0 or len(a_pos) == 0:
-            return
-
-        to_remain, min_dists_idx = dist_util(r_pos, a_pos, world.eating_distace)
-        
-        for i, val in enumerate(to_remain):
-            if not val and world.landmarks[i].is_active:
-                # If resource is eaten, the landmark becomes inactive (recovery)
-                curr_agent = world.agents[min_dists_idx[i]]
-                curr_agent.eat(world.landmarks[i])
-                world.landmarks[i].is_active = False
-            """
-            if curr_agent.reproduce():
-                new_agent = copy.deepcopy(curr_agent)
-                new_agent.mutate()
-                new_agent.step_alive = 0
-                new_agent.name = f'agent_{world.agent_counter}'
-                world.agent_counter += 1
-                new_agent.state.p_vel = np.zeros(world.dim_p)
-                new_agent.state.c = np.zeros(world.dim_c)
-            """
-
-
