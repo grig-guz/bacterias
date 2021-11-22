@@ -28,6 +28,7 @@ class PetriMaterial(PetriLandmark):
         self.resource_type = "material"
         self.state.p_pos = np.array(loc)
         self.color = np.array(color)
+        self.is_waste = False
 
 
 class PetriAgent(Agent):

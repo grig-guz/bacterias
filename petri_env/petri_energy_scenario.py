@@ -195,6 +195,7 @@ class PetriEnergyScenario(BaseScenario):
             new_loc = agent.state.p_pos + np.random.uniform(-0.1, 0.1, 2)
             res_color = agent.produces
             resource = PetriMaterial(new_loc, res_color)
+            resource.is_waste = True
             world.landmarks.append(resource)
 
     def eat_resource(self, agent, world):
@@ -260,6 +261,5 @@ class PetriEnergyScenario(BaseScenario):
                 new_agent.state.p_vel = np.zeros(world.dim_p)
                 new_agent.state.c = np.zeros(world.dim_c)
             """
-        self.resource_generator.update_resources()
 
 

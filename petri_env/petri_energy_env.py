@@ -60,8 +60,10 @@ class raw_env(SimpleEnv):
                 landmark = agent.currently_eating
                 agent.currently_eating = None
                 idx = self.world.landmarks.index(landmark)
-                res_to_keep[idx] = False
                 agent.eat(landmark)
+                landmark.is_active = False
+                if landmark.is_waste:
+                    res_to_keep[idx] = False
             elif agent.currently_attacking is not None:
                 a = agent.currently_attacking
                 agent.currently_attacking = None
@@ -70,7 +72,7 @@ class raw_env(SimpleEnv):
                 agent.attack_agent(a)
             
         self.world.landmarks = [self.world.landmarks[i] for i, to_keep in enumerate(res_to_keep) if to_keep]
-        self.scenario.resource_generator.generate_initial_resources()
+        self.resource_generator.update_resources()
         self.world.agents = [self.world.agents[i] for i, to_keep in enumerate(ag_to_keep) if to_keep and self.world.agents[i].energy_store > 0] + self.agents_to_add
         self.agents_to_add = []
         self.env_step += 1
