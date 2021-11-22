@@ -75,10 +75,10 @@ class PetriEnergyScenario(BaseScenario):
         for _ in range(1):
             loc = np.random.uniform(-self.world_bound / 2, self.world_bound / 2, 2)
             color = np.array([1., 0., 0.])
-            consumes = np.random.uniform(0, 1, 3)
-            produces = np.random.uniform(0, 1, 3)
-            #consumes = np.array([1., 0., 0.])
-            #produces = np.array([1., 0., 0.])
+            #consumes = np.random.uniform(0, 1, 3)
+            #produces = np.random.uniform(0, 1, 3)
+            consumes = np.array([1., 0., 0.])
+            produces = np.array([1., 0., 0.])
             if repr_agent is None:
                 policy = GCNLSTMPolicy(obs_dim=8, action_dim=self.action_dim, sigma=self.model_sigma)
             else:
