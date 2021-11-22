@@ -78,7 +78,7 @@ class GCNLSTMPolicy(PetriPolicy):
     def __init__(self, obs_dim, action_dim, sigma):
         super().__init__(sigma)
         self.relu = nn.Tanh()
-        self.hid_dim = 64
+        self.hid_dim = 32
         self.agents_linear = nn.Linear(13, self.hid_dim)
         self.landmarks_linear = nn.Linear(5, self.hid_dim)
         self.agg_agents_linear = nn.Linear(self.hid_dim, self.hid_dim)

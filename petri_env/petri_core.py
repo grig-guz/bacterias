@@ -130,6 +130,14 @@ class PetriWorld(World):
         super().__init__()
         self.world_bound = config['world_bound']
         self.eating_distace = config['eating_distance']
+        start = -self.world_bound
+        bins = []
+        while start < self.world_bound:
+            bins.append(start)
+            start += 0.1
+        self.bins = np.array(bins)
+        cell_size = int(self.world_bound * 2 / 0.1)
+        self.cell = np.zeros(shape=(cell_size, cell_size, 10))
 
     @property
     def agent_positions(self):
@@ -148,9 +156,23 @@ class PetriWorld(World):
         return [resource.state.p_pos for resource in self.landmarks]
 
     def calculate_distances(self):
-        self.agent_res_distances = euclidean_distances(self.agent_positions, self.active_resource_positions)
-        self.agent_agent_distances = euclidean_distances(self.agent_positions, self.agent_positions)
-        np.fill_diagonal(self.agent_agent_distances, np.inf)
+        #self.agent_res_distances = euclidean_distances(self.agent_positions, self.active_resource_positions)
+        #self.agent_agent_distances = euclidean_distances(self.agent_positions, self.agent_positions)
+        #np.fill_diagonal(self.agent_agent_distances, np.inf)
+        self.cell = np.zeros(shape=(self.cell.shape))
+        for agent in self.agents:
+            x, y = agent.state.p_pos
+            x = np.digitize(x, self.bins) - 1
+            y = np.digitize(x, self.bins) - 1
+            self.cell[x, y, :3] = agent.color
+            self.cell[x, y, 3:6] = agent.consumes
+            self.cell[x, y, 6:9] = agent.produces
+        
+        for landmark in self.active_resources:
+            x, y = landmark.state.p_pos
+            x = np.digitize(x, self.bins) - 1
+            y = np.digitize(x, self.bins) - 1
+            self.cell[x, y, :3] = landmark.color
 
     # update state of the world
     def step(self):

@@ -24,7 +24,6 @@ class PetriEnergyScenario(BaseScenario):
         self.eating_distance = config['eating_distance']
         self.visibility = config['visibility']
         self.res_gen_type = config['res_gen_type']
-        self.agents_produce_resouces = config['agents_produce_resources']
         self.world_bound = config['world_bound']
         self.num_resources = config["num_resources"]
         self.num_agents = config['num_agents']
@@ -111,7 +110,7 @@ class PetriEnergyScenario(BaseScenario):
     def reward(self, agent, world):
         return 0
 
-    def observation(self, agent, world):
+    def cnn_observation(self, agent, world):
         # GCN observation
         # get positions of all entities in this agent's reference frame
         landmarks = world.active_resources
@@ -143,7 +142,7 @@ class PetriEnergyScenario(BaseScenario):
     def observation(self, agent, world):
         # GCN observation
         # get positions of all entities in this agent's reference frame
-        landmarks = world.landmarks
+        landmarks = world.active_resources
         agents = world.agents
         agent_id = world.agents.index(agent)
 
@@ -236,31 +235,3 @@ class PetriEnergyScenario(BaseScenario):
                 if closest_dist < self.eating_distance:
                     print("SUCCESSFUL EATING!")
                     agent.assign_attack(other_agents[closest_idx])
-
-    def consume_resources(self, world):
-        a_pos = np.array(world.agent_positions)
-        r_pos = np.array(world.resource_positions)
-
-        if len(r_pos) == 0 or len(a_pos) == 0:
-            return
-
-        to_remain, min_dists_idx = dist_util(r_pos, a_pos, world.eating_distace)
-        
-        for i, val in enumerate(to_remain):
-            if not val and world.landmarks[i].is_active:
-                # If resource is eaten, the landmark becomes inactive (recovery)
-                curr_agent = world.agents[min_dists_idx[i]]
-                curr_agent.eat(world.landmarks[i])
-                world.landmarks[i].is_active = False
-            """
-            if curr_agent.reproduce():
-                new_agent = copy.deepcopy(curr_agent)
-                new_agent.mutate()
-                new_agent.step_alive = 0
-                new_agent.name = f'agent_{world.agent_counter}'
-                world.agent_counter += 1
-                new_agent.state.p_vel = np.zeros(world.dim_p)
-                new_agent.state.c = np.zeros(world.dim_c)
-            """
-
-
