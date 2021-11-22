@@ -47,10 +47,10 @@ class PetriAgent(Agent):
         self.consumed_energy = False
 
     def mutate(self):
-        self.color += np.random.uniform(-0.05, 0.05, 3)
-        self.consumes += np.random.uniform(-0.05, 0.05, 3)
-        self.produces += np.random.uniform(-0.05, 0.05, 3)
-
+        self.color = np.clip(self.color + np.random.uniform(-0.05, 0.05, 3), 0, 1)
+        self.consumes = np.clip(self.consumes + np.random.uniform(-0.05, 0.05, 3), 0, 1)
+        self.produces = np.clip(self.produces + np.random.uniform(-0.05, 0.05, 3), 0, 1)
+        self.energy_store = self.max_energy / 3
         self.color[self.color < 0] = 0
         self.color[self.color > 1] = 1
         self.consumes[self.consumes < 0] = 0
@@ -89,13 +89,13 @@ class PetriEnergyAgent(PetriAgent):
         self.energy_store -= self.move_cost
 
     def assign_eat(self, idx, world):
-        self.currently_eating = world.landmarks[idx]
+        self.currently_eating = world.active_resources[idx]
 
     def eat(self, landmark):
         dist = np.sum(np.abs(self.consumes - landmark.color))
         # Maximum distance is 3 since all colors entries are within [0, 1]
         # Highest energy it can consume is max_energy / 2
-        new_energy = (3 - dist) / 3 * self.max_energy
+        new_energy = (3 - dist) / 3 * self.max_energy / 3
         self.energy_store = min(self.max_energy, self.energy_store + new_energy)
 
     def reproduce(self):
@@ -148,7 +148,7 @@ class PetriWorld(World):
         return [resource.state.p_pos for resource in self.landmarks]
 
     def calculate_distances(self):
-        self.agent_res_distances = euclidean_distances(self.agent_positions, self.resource_positions)
+        self.agent_res_distances = euclidean_distances(self.agent_positions, self.active_resource_positions)
         self.agent_agent_distances = euclidean_distances(self.agent_positions, self.agent_positions)
         np.fill_diagonal(self.agent_agent_distances, np.inf)
 

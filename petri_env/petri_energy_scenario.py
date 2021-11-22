@@ -75,10 +75,10 @@ class PetriEnergyScenario(BaseScenario):
         for _ in range(1):
             loc = np.random.uniform(-self.world_bound / 2, self.world_bound / 2, 2)
             color = np.array([1., 0., 0.])
-            #consumes = np.random.uniform(0, 1, 3)
-            #produces = np.random.uniform(0, 1, 3)
-            consumes = np.array([1., 0., 0.])
-            produces = np.array([1., 0., 0.])
+            consumes = np.random.uniform(0, 1, 3)
+            produces = np.random.uniform(0, 1, 3)
+            #consumes = np.array([1., 0., 0.])
+            #produces = np.array([1., 0., 0.])
             if repr_agent is None:
                 policy = GCNLSTMPolicy(obs_dim=8, action_dim=self.action_dim, sigma=self.model_sigma)
             else:
@@ -114,7 +114,7 @@ class PetriEnergyScenario(BaseScenario):
     def observation(self, agent, world):
         # GCN observation
         # get positions of all entities in this agent's reference frame
-        landmarks = world.landmarks
+        landmarks = world.active_resources
         agents = world.agents
         agent_id = world.agents.index(agent)
 
@@ -200,7 +200,7 @@ class PetriEnergyScenario(BaseScenario):
 
     def eat_resource(self, agent, world):
         a_pos = np.array([agent.state.p_pos])
-        r_pos = np.array(world.resource_positions)
+        r_pos = np.array(world.active_resource_positions)
         if len(r_pos) > 0:
             src_dst_dists = euclidean_distances(a_pos, r_pos)[0]
             closest_idx = np.argmin(src_dst_dists)
@@ -234,6 +234,7 @@ class PetriEnergyScenario(BaseScenario):
                 closest_idx = np.argmin(src_dst_dists)
                 closest_dist = src_dst_dists[closest_idx]
                 if closest_dist < self.eating_distance:
+                    print("SUCCESSFUL EATING!")
                     agent.assign_attack(other_agents[closest_idx])
 
     def consume_resources(self, world):

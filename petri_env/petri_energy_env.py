@@ -12,6 +12,7 @@ from pettingzoo.utils import wrappers
 from utils import *
 from random import sample
 import copy
+from collections import defaultdict
 
 def make_env(raw_env):
     def env(config, **kwargs):
@@ -55,25 +56,29 @@ class raw_env(SimpleEnv):
         res_to_keep = [True for _ in range(len(self.world.landmarks))]
         ag_to_keep = [True for _ in range(len(self.world.agents))]
 
+        res_eating_map = defaultdict(list)
         for agent in self.world.agents:
             if agent.currently_eating is not None:
                 landmark = agent.currently_eating
                 agent.currently_eating = None
                 idx = self.world.landmarks.index(landmark)
-                agent.eat(landmark)
                 landmark.is_active = False
                 if landmark.is_waste:
                     res_to_keep[idx] = False
+                res_eating_map[landmark].append(agent)
             elif agent.currently_attacking is not None:
                 a = agent.currently_attacking
                 agent.currently_attacking = None
                 idx = self.world.agents.index(a)
                 ag_to_keep[idx] = False
                 agent.attack_agent(a)
-            
+
+        self.resolve_collisions(res_eating_map)
+
         self.world.landmarks = [self.world.landmarks[i] for i, to_keep in enumerate(res_to_keep) if to_keep]
-        self.resource_generator.update_resources()
+        self.scenario.resource_generator.update_resources()
         self.world.agents = [self.world.agents[i] for i, to_keep in enumerate(ag_to_keep) if to_keep and self.world.agents[i].energy_store > 0] + self.agents_to_add
+        print("Num agents: {}".format(len(self.world.agents)))
         self.agents_to_add = []
         self.env_step += 1
         # Added the ability for agents to die.
@@ -87,6 +92,13 @@ class raw_env(SimpleEnv):
 
         self.world.calculate_distances()
         self.reset_maps()
+
+    def resolve_collisions(self, res_eating_map):
+        # Resolve resource eating collisions
+        for res, agents in res_eating_map.items():
+            agent = random.sample(agents, 1)[0]
+            agent.eat(res)
+        # Resolve agent attacking collisions
 
 
     def _execute_world_step(self):
@@ -231,7 +243,7 @@ class raw_env(SimpleEnv):
                     geom = rendering.make_circle(entity.size)
                 xform = rendering.Transform()
                 if 'agent' in entity.name:
-                    geom.set_color(*entity.color[:3], alpha=0.5)
+                    geom.set_color(*entity.consumes[:3], alpha=0.5)
                 else:
                     geom.set_color(*entity.color[:3])
                 geom.add_attr(xform)
