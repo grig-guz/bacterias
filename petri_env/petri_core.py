@@ -17,7 +17,6 @@ class PetriEnergy(PetriLandmark):
         super().__init__()
         self.resource_type = "energy"
         self.state.p_pos = loc
-        self.is_active = True
         self.color = np.array([255, 255, 0])
 
 
@@ -39,25 +38,17 @@ class PetriAgent(Agent):
         self.consumes = np.array(consumes)
         self.produces = np.array(produces)
         self.color = np.array(material)
-        self.can_reproduce = False
         self.step_alive = 0
         self.policy = policy
         self.is_active = True
         self.consumed_material = False
-        self.consumed_energy = False
 
     def mutate(self):
         self.color = np.clip(self.color + np.random.uniform(-0.05, 0.05, 3), 0, 1)
         self.consumes = np.clip(self.consumes + np.random.uniform(-0.05, 0.05, 3), 0, 1)
         self.produces = np.clip(self.produces + np.random.uniform(-0.05, 0.05, 3), 0, 1)
         self.energy_store = self.max_energy / 3
-        self.color[self.color < 0] = 0
-        self.color[self.color > 1] = 1
-        self.consumes[self.consumes < 0] = 0
-        self.consumes[self.consumes > 1] = 1
-        self.produces[self.produces < 0] = 0
-        self.produces[self.produces > 1] = 1
-
+        self.consumed_material = False
         self.policy.mutate()
 
 class PetriEnergyAgent(PetriAgent):
@@ -76,11 +67,19 @@ class PetriEnergyAgent(PetriAgent):
         self.lineage_length = 1
 
     def can_produce_resource(self):
-        if self.energy_store - self.prod_cost > 0:
-            self.energy_store -= self.prod_cost
+        energy_gain = self.get_energy_gain(self.consumes)
+        if self.energy_store - energy_gain > 0 and self.consumed_material:
+            self.energy_store -= energy_gain
             return True
         else:
             return False
+
+    def get_energy_gain(self, color):
+        dist = np.sum(np.abs(self.consumes - color))
+        # Maximum distance is 3 since all colors entries are within [0, 1]
+        # Highest energy it can consume is max_energy / 2
+        new_energy = (3 - dist) / 3 * self.max_energy / 2
+        return new_energy
 
     def idle(self):
         self.energy_store -= self.idle_cost
@@ -92,11 +91,9 @@ class PetriEnergyAgent(PetriAgent):
         self.currently_eating = world.active_resources[idx]
 
     def eat(self, landmark):
-        dist = np.sum(np.abs(self.consumes - landmark.color))
-        # Maximum distance is 3 since all colors entries are within [0, 1]
-        # Highest energy it can consume is max_energy / 2
-        new_energy = (3 - dist) / 3 * self.max_energy / 3
+        new_energy = self.get_energy_gain(landmark.color)
         self.energy_store = min(self.max_energy, self.energy_store + new_energy)
+        self.consumed_material = True
 
     def reproduce(self):
         if self.energy_store - self.reprod_cost > 0:
@@ -117,11 +114,9 @@ class PetriEnergyAgent(PetriAgent):
         self.currently_attacking = agent
 
     def attack_agent(self, ag):
-        dist = np.sum(np.square(self.consumes - ag.color))
-        # Maximum distance is 3 since all colors entries are within [0, 1]
-        # Highest energy it can consume is max_energy / 2
-        new_energy = (3 - dist) / 3 * self.max_energy / 2
+        new_energy = self.get_energy_gain(ag.color)
         self.energy_store = min(self.max_energy, self.energy_store + new_energy)
+        self.consumed_material = True
 
 
 class PetriWorld(World):
@@ -136,8 +131,8 @@ class PetriWorld(World):
             bins.append(start)
             start += 0.1
         self.bins = np.array(bins)
-        cell_size = int(self.world_bound * 2 / 0.1)
-        self.cell = np.zeros(shape=(cell_size, cell_size, 10))
+        self.cell_size = int(self.world_bound * 2 / 0.1)
+        self.cell = np.zeros(shape=(14, self.cell_size, self.cell_size))
 
     @property
     def agent_positions(self):
@@ -163,16 +158,16 @@ class PetriWorld(World):
         for agent in self.agents:
             x, y = agent.state.p_pos
             x = np.digitize(x, self.bins) - 1
-            y = np.digitize(x, self.bins) - 1
-            self.cell[x, y, :3] = agent.color
-            self.cell[x, y, 3:6] = agent.consumes
-            self.cell[x, y, 6:9] = agent.produces
+            y = np.digitize(y, self.bins) - 1
+            self.cell[:3, x, y] = agent.color
+            self.cell[3:6, x, y] = agent.consumes
+            self.cell[6:9, x, y] = agent.produces
         
         for landmark in self.active_resources:
             x, y = landmark.state.p_pos
             x = np.digitize(x, self.bins) - 1
-            y = np.digitize(x, self.bins) - 1
-            self.cell[x, y, :3] = landmark.color
+            y = np.digitize(y, self.bins) - 1
+            self.cell[9:12, x, y] = landmark.color
 
     # update state of the world
     def step(self):

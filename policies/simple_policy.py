@@ -110,8 +110,8 @@ class GCNLSTMPolicy(PetriPolicy):
 
         obs = torch.cat([agents_obs, landmarks_obs, c_agent_obs])
         self.hx, self.cx = self.lstm(obs.unsqueeze(0), (self.hx, self.cx))
-        act_mov = self.final_linear_mov(obs)
-        act_inter = self.final_linear_inter(obs)
+        act_mov = self.final_linear_mov(self.hx)
+        act_inter = self.final_linear_inter(self.hx)
         return int(torch.argmax(act_mov)), int(torch.argmax(act_inter))
 
     def agg_func(self, inpt, inner_layer, outer_layer):
@@ -182,3 +182,44 @@ class GCNAttnPolicy(GCNPolicy):
         act_mov = self.final_linear_mov(res)
         act_inter = self.final_linear_inter(res)
         return int(torch.argmax(act_mov)), int(torch.argmax(act_inter))
+
+
+class CNNLSTMPolicy(PetriPolicy):
+
+    def __init__(self, obs_dim, action_dim, sigma):
+        super().__init__(sigma)
+        self.relu = nn.Tanh()
+        self.hid_dim = 160
+        self.cnn1 = nn.Conv2d(14, 20, 2, 2)
+        self.cnn2 = nn.Conv2d(20, 20, 3, 2)
+        self.cnn3 = nn.Conv2d(20, 10, 3, 2)
+
+        self.final_linear_mov = nn.Linear(self.hid_dim, 4)
+        self.final_linear_inter = nn.Linear(self.hid_dim, action_dim)
+        self.lstm = nn.LSTMCell(360, self.hid_dim)
+        self.hx = torch.zeros(1, self.hid_dim)
+        self.cx = torch.zeros(1, self.hid_dim)
+
+
+    def forward(self, obs):
+
+        obs = torch.tensor(obs).float().unsqueeze(0)
+        obs = self.relu(self.cnn1(obs))
+        obs = self.relu(self.cnn2(obs))
+        obs = self.relu(self.cnn3(obs))
+        obs = obs.flatten()
+        self.hx, self.cx = self.lstm(obs.unsqueeze(0), (self.hx, self.cx))
+        act_mov = self.final_linear_mov(self.hx)
+        act_inter = self.final_linear_inter(self.hx)
+        return int(torch.argmax(act_mov)), int(torch.argmax(act_inter))
+
+    def agg_func(self, inpt, inner_layer, outer_layer):
+        inpt = self.relu(inner_layer(inpt))
+        inpt = torch.mean(inpt, dim=0)
+        inpt = self.relu(outer_layer(inpt))
+        return inpt
+
+    def mutate(self):
+        super().mutate()
+        self.hx = torch.zeros(1, self.hid_dim)
+        self.cx = torch.zeros(1, self.hid_dim)

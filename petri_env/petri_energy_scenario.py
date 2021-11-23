@@ -75,11 +75,11 @@ class PetriEnergyScenario(BaseScenario):
             loc = np.random.uniform(-self.world_bound / 2, self.world_bound / 2, 2)
             color = np.array([1., 0., 0.])
             #consumes = np.random.uniform(0, 1, 3)
-            #produces = np.random.uniform(0, 1, 3)
+            produces = np.random.uniform(0, 1, 3)
             consumes = np.array([1., 0., 0.])
-            produces = np.array([1., 0., 0.])
+            #produces = np.array([1., 0., 0.])
             if repr_agent is None:
-                policy = GCNLSTMPolicy(obs_dim=8, action_dim=self.action_dim, sigma=self.model_sigma)
+                policy = CNNLSTMPolicy(obs_dim=8, action_dim=self.action_dim, sigma=self.model_sigma)
             else:
                 policy = copy.deepcopy(repr_agent.policy)
                 policy.mutate()
@@ -110,35 +110,19 @@ class PetriEnergyScenario(BaseScenario):
     def reward(self, agent, world):
         return 0
 
-    def cnn_observation(self, agent, world):
+    def observation(self, agent, world):
         # GCN observation
         # get positions of all entities in this agent's reference frame
-        landmarks = world.active_resources
-        agents = world.agents
-        agent_id = world.agents.index(agent)
 
-        agents_states = []
-        if len(agents) > 0:
-            agents_states = self.get_features(agent, agent_id, agents, world.agent_agent_distances, self.get_agent_features)
-
-        landmark_states = []
-        if len(landmarks) > 0:
-            landmark_states = self.get_features(agent, agent_id, landmarks, world.agent_res_distances, self.get_landmark_features)
-
-        return [np.array(agents_states), 
-                np.array(landmark_states), 
-                np.concatenate([agent.state.p_pos / self.world_bound, 
-                        agent.state.p_vel, 
-                        np.array([self.world_bound - agent.state.p_pos[0],
-                                    self.world_bound - agent.state.p_pos[1],
-                                    -self.world_bound - agent.state.p_pos[0],
-                                    -self.world_bound - agent.state.p_pos[1]]) / self.world_bound,
-                        np.array([agent.energy_store]) / self.max_energy, 
-                        agent.color, 
-                        agent.consumes, 
-                        agent.produces])]
-
-
+        cell = copy.deepcopy(world.cell)
+        x, y = agent.state.p_pos
+        x = np.digitize(x, world.bins) - 1
+        y = np.digitize(y, world.bins) - 1
+        # Agent identity
+        cell[12, x, y] = 1
+        cell[13, x, y] = agent.energy_store / self.max_energy
+        return cell
+    """
     def observation(self, agent, world):
         # GCN observation
         # get positions of all entities in this agent's reference frame
@@ -166,7 +150,7 @@ class PetriEnergyScenario(BaseScenario):
                         agent.color, 
                         agent.consumes, 
                         agent.produces])]
-
+    """
     def get_features(self, agent, agent_id, entity_list, distances, feat_func):
 
         acc = []
@@ -191,11 +175,13 @@ class PetriEnergyScenario(BaseScenario):
 
     def produce_resource(self, agent, world):
         if agent.can_produce_resource():
-            new_loc = agent.state.p_pos + np.random.uniform(-0.1, 0.1, 2)
+            new_loc = np.clip(agent.state.p_pos + np.random.uniform(-0.3, 0.3, 2), -self.world_bound, self.world_bound)
             res_color = agent.produces
             resource = PetriMaterial(new_loc, res_color)
             resource.is_waste = True
+            agent.consumed_material = False
             world.landmarks.append(resource)
+            print("produced resouce")
 
     def eat_resource(self, agent, world):
         a_pos = np.array([agent.state.p_pos])

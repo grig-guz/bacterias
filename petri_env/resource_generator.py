@@ -14,11 +14,16 @@ class ResourceGenerator():
         raise NotImplementedError
 
     def update_resources(self):
-        for landmark in self.world.landmarks:
+        res_to_keep = [True for _ in range(len(self.world.landmarks))]
+        for i, landmark in enumerate(self.world.landmarks):
             if not landmark.is_active:
-                landmark.inactive_count += 1
-                if landmark.inactive_count >= self.recov_time:
-                    self.activate_resource(landmark)
+                if landmark.is_waste:
+                    res_to_keep[i] = False
+                else:
+                    landmark.inactive_count += 1
+                    if landmark.inactive_count >= self.recov_time:
+                        self.activate_resource(landmark)
+        self.world.landmarks = [landmark for i, landmark in enumerate(self.world.landmarks) if res_to_keep[i]]
 
     def activate_resource(self, resource):
         raise NotImplementedError
