@@ -47,6 +47,7 @@ class raw_env(SimpleEnv):
         super().__init__(scenario, world, config['max_cycles'], continuous_actions)
         self.metadata['name'] = "petri_env"
         self.env_step = 0
+        self.num_reproductions = 0
 
     def update_world_state(self):
 
@@ -78,7 +79,7 @@ class raw_env(SimpleEnv):
         self.world.landmarks = [self.world.landmarks[i] for i, to_keep in enumerate(res_to_keep) if to_keep]
         self.scenario.resource_generator.update_resources()
         self.world.agents = [self.world.agents[i] for i, to_keep in enumerate(ag_to_keep) if to_keep and self.world.agents[i].energy_store > 0] + self.agents_to_add
-        print("Num agents: {} {} {}".format(len(self.world.agents), self.env_step, len(self.reproducible_agents)))
+        print("Num agents: {} {} {} {}".format(len(self.world.agents), self.env_step, len(self.reproducible_agents), self.num_reproductions))
         self.agents_to_add = []
         self.env_step += 1
         # Added the ability for agents to die.
@@ -150,9 +151,9 @@ class raw_env(SimpleEnv):
                 # Agency variations:
                 if interact_act == 0:
                     # Reproduce
-                    agent.idle()
                     a = self.scenario.reproduce_agent(agent, world)
                     if a is not None:
+                        self.num_reproductions += 1
                         self.agents_to_add.append(a)
                         saved_ag = copy.deepcopy(agent)
                         saved_ag.lineage_length = 1
@@ -163,13 +164,11 @@ class raw_env(SimpleEnv):
                     act_id += 1
                     if interact_act == act_id:
                         # Produce resource
-                        agent.idle()
                         self.scenario.produce_resource(agent, world)
                 if self.config["eat_action"]:
                     act_id += 1
                     if interact_act == act_id:
                         # Eat resource
-                        agent.idle()
                         self.scenario.eat_resource(agent, world)                            
                 if self.config["attack_action"]:
                     act_id += 1

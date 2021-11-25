@@ -72,6 +72,7 @@ class PetriEnergyAgent(PetriAgent):
             self.energy_store -= energy_gain
             return True
         else:
+            self.idle()
             return False
 
     def get_energy_gain(self, color):
@@ -100,6 +101,7 @@ class PetriEnergyAgent(PetriAgent):
             self.energy_store -= self.reprod_cost
             return True
         else:
+            self.idle()
             return False
 
     def attack(self):
@@ -129,10 +131,10 @@ class PetriWorld(World):
         bins = []
         while start < self.world_bound:
             bins.append(start)
-            start += 0.1
+            start += 0.05
         self.bins = np.array(bins)
-        self.cell_size = int(self.world_bound * 2 / 0.1)
-        self.cell = np.zeros(shape=(14, self.cell_size, self.cell_size))
+        self.cell_size = int(self.world_bound * 2 / 0.05)
+        self.cell = np.zeros(shape=(14, self.cell_size + 1, self.cell_size + 1))
 
     @property
     def agent_positions(self):
@@ -154,20 +156,20 @@ class PetriWorld(World):
         #self.agent_res_distances = euclidean_distances(self.agent_positions, self.active_resource_positions)
         #self.agent_agent_distances = euclidean_distances(self.agent_positions, self.agent_positions)
         #np.fill_diagonal(self.agent_agent_distances, np.inf)
-        self.cell = np.zeros(shape=(self.cell.shape))
+        self.cell = -np.ones(shape=(self.cell.shape))
         for agent in self.agents:
             x, y = agent.state.p_pos
             x = np.digitize(x, self.bins) - 1
-            y = np.digitize(y, self.bins) - 1
-            self.cell[:3, x, y] = agent.color
-            self.cell[3:6, x, y] = agent.consumes
-            self.cell[6:9, x, y] = agent.produces
+            y = np.digitize(-y, self.bins) - 1
+            self.cell[:3, y, x] = agent.color
+            self.cell[3:6, y, x] = agent.consumes
+            self.cell[6:9, y, x] = agent.produces
         
         for landmark in self.active_resources:
             x, y = landmark.state.p_pos
             x = np.digitize(x, self.bins) - 1
-            y = np.digitize(y, self.bins) - 1
-            self.cell[9:12, x, y] = landmark.color
+            y = np.digitize(-y, self.bins) - 1
+            self.cell[9:12, y, x] = landmark.color
 
     # update state of the world
     def step(self):

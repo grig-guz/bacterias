@@ -1,5 +1,8 @@
 import numpy as np
 import copy
+import os
+np.set_printoptions(threshold=np.inf)
+import time
 
 from pettingzoo.mpe._mpe_utils.scenario import BaseScenario
 from torch._C import _resolve_type_from_object
@@ -38,6 +41,7 @@ class PetriEnergyScenario(BaseScenario):
         if config["produce_res_action"]:
             self.action_dim += 1
         self.novelty_buffer = []
+        self.count = 0
 
 
 
@@ -72,7 +76,7 @@ class PetriEnergyScenario(BaseScenario):
 
     def add_random_agent(self, world, repr_agent=None):
         for _ in range(1):
-            loc = np.random.uniform(-self.world_bound / 2, self.world_bound / 2, 2)
+            loc = np.random.uniform(-self.world_bound, self.world_bound, 2)
             color = np.array([1., 0., 0.])
             #consumes = np.random.uniform(0, 1, 3)
             produces = np.random.uniform(0, 1, 3)
@@ -113,15 +117,29 @@ class PetriEnergyScenario(BaseScenario):
     def observation(self, agent, world):
         # GCN observation
         # get positions of all entities in this agent's reference frame
-
         cell = copy.deepcopy(world.cell)
         x, y = agent.state.p_pos
         x = np.digitize(x, world.bins) - 1
-        y = np.digitize(y, world.bins) - 1
+        y = np.digitize(-y, world.bins) - 1
         # Agent identity
-        cell[12, x, y] = 1
-        cell[13, x, y] = agent.energy_store / self.max_energy
+        cell[12, y, x] = 1
+        # Agent energy amount
+        cell[13, y, x] = agent.energy_store / self.max_energy
+
+
+        """
+        dirname = os.path.dirname(__file__)
+        filename = os.path.join(dirname, 'test.npy')
+        with open(filename, 'wb') as f:
+            np.save(f, cell)
+            print("SAVED")
+        if self.count > 0:
+            time.sleep(30)
+        self.count += 1
+        """
         return cell
+
+
     """
     def observation(self, agent, world):
         # GCN observation

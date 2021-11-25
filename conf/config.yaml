@@ -7,8 +7,8 @@ env_config:
   visibility: 6
   sigma: 0.2
   model_sigma: 0.05
-  num_resources: 90
-  recov_time: 50
+  num_resources: 30
+  recov_time: 200
   agent_lifetime: 60
   max_n_agents: 10
   
