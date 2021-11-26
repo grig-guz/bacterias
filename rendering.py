@@ -14,15 +14,14 @@ def collect_render_results(env, mode):
                 obs, reward, done, info = env.last()
                 if done:
                     action = None
-                elif isinstance(obs, dict) and 'action_mask' in obs:
-                    action = random.choice(np.flatnonzero(obs['action_mask']))
                 else:
                     unwrapped = env.unwrapped
                     with torch.no_grad():
                         action = unwrapped.world.agents[unwrapped._index_map[agent]].policy(obs)
                 env.step(action)
-        render_result = env.render(mode=mode)
-        results.append(render_result)
+        if i % 20 == 0:
+            render_result = env.render(mode=mode)
+        #results.append(render_result)
 
     return results
 

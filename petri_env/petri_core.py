@@ -127,35 +127,26 @@ class PetriWorld(World):
         super().__init__()
         self.world_bound = config['world_bound']
         self.eating_distace = config['eating_distance']
+        self.wrap_around = config['wrap_around']
         start = -self.world_bound
         bins = []
         while start < self.world_bound:
             bins.append(start)
-            start += 0.05
+            start += 0.1
         self.bins = np.array(bins)
-        self.cell_size = int(self.world_bound * 2 / 0.05)
-        self.cell = np.zeros(shape=(14, self.cell_size + 1, self.cell_size + 1))
-
-    @property
-    def agent_positions(self):
-        return [agent.state.p_pos for agent in self.agents]
-
-    @property
-    def active_resource_positions(self):
-        return [resource.state.p_pos for resource in self.landmarks if resource.is_active]
-
-    @property
-    def active_resources(self):
-        return [resource for resource in self.landmarks if resource.is_active]
-
-    @property
-    def resource_positions(self):
-        return [resource.state.p_pos for resource in self.landmarks]
+        self.cell_size = int(self.world_bound * 2 / 0.1)
+        self.cell = np.zeros(shape=(14, self.cell_size, self.cell_size))
 
     def calculate_distances(self):
-        #self.agent_res_distances = euclidean_distances(self.agent_positions, self.active_resource_positions)
-        #self.agent_agent_distances = euclidean_distances(self.agent_positions, self.agent_positions)
-        #np.fill_diagonal(self.agent_agent_distances, np.inf)
+        self.active_resources = [resource for resource in self.landmarks if resource.is_active]
+        self.active_resource_positions = [resource.state.p_pos for resource in self.landmarks if resource.is_active]
+        self.agent_positions = [agent.state.p_pos for agent in self.agents]
+        self.agent_res_distances = euclidean_distances(self.agent_positions, self.active_resource_positions)
+        self.agent_agent_distances = euclidean_distances(self.agent_positions, self.agent_positions)
+        
+        #self.active_resources = [resource for resource in self.landmarks if resource.is_active]
+        np.fill_diagonal(self.agent_agent_distances, np.inf)
+        """
         self.cell = -np.ones(shape=(self.cell.shape))
         for agent in self.agents:
             x, y = agent.state.p_pos
@@ -170,7 +161,7 @@ class PetriWorld(World):
             x = np.digitize(x, self.bins) - 1
             y = np.digitize(-y, self.bins) - 1
             self.cell[9:12, y, x] = landmark.color
-
+        """
     # update state of the world
     def step(self):
         # set actions for scripted agents
@@ -181,7 +172,7 @@ class PetriWorld(World):
         # apply agent physical controls
         p_force = self.apply_action_force(p_force)
         # apply environment forces
-        p_force = self.apply_environment_force(p_force)
+        #p_force = self.apply_environment_force(p_force)
         # integrate physical state
         self.integrate_state(p_force)
         # update agent state
@@ -201,29 +192,27 @@ class PetriWorld(World):
                     entity.state.p_vel = entity.state.p_vel / np.sqrt(np.square(entity.state.p_vel[0]) + np.square(entity.state.p_vel[1])) * entity.max_speed
 
             entity.state.p_pos += entity.state.p_vel * self.dt
-            """
-            if entity.state.p_pos[0] > self.world_bound:
-                entity.state.p_pos[0] = -self.world_bound
-            elif entity.state.p_pos[0] < -self.world_bound:
-                entity.state.p_pos[0] = self.world_bound
+            if self.wrap_around:
+                if entity.state.p_pos[0] > self.world_bound:
+                    entity.state.p_pos[0] = -self.world_bound
+                elif entity.state.p_pos[0] < -self.world_bound:
+                    entity.state.p_pos[0] = self.world_bound
 
-            if entity.state.p_pos[1] > self.world_bound:
-                entity.state.p_pos[1] = -self.world_bound
-            elif entity.state.p_pos[1] < -self.world_bound:
-                entity.state.p_pos[1] = self.world_bound
-            """
-            
-            if entity.state.p_pos[0] > self.world_bound:
-                entity.state.p_pos[0] = self.world_bound
-                #entity.energy_store = -1
-            elif entity.state.p_pos[0] < -self.world_bound:
-                entity.state.p_pos[0] = -self.world_bound
-                #entity.energy_store = -1
+                if entity.state.p_pos[1] > self.world_bound:
+                    entity.state.p_pos[1] = -self.world_bound
+                elif entity.state.p_pos[1] < -self.world_bound:
+                    entity.state.p_pos[1] = self.world_bound
+            else:
+                if entity.state.p_pos[0] > self.world_bound:
+                    entity.state.p_pos[0] = self.world_bound
+                    #entity.energy_store = -1
+                if entity.state.p_pos[0] < -self.world_bound:
+                    entity.state.p_pos[0] = -self.world_bound
+                    #entity.energy_store = -1
 
-            if entity.state.p_pos[1] > self.world_bound:
-                entity.state.p_pos[1] = self.world_bound
-                #entity.energy_store = -1
-            elif entity.state.p_pos[1] < -self.world_bound:
-                entity.state.p_pos[1] = -self.world_bound
-                #entity.energy_store = -1
-            
+                if entity.state.p_pos[1] > self.world_bound:
+                    entity.state.p_pos[1] = self.world_bound
+                    #entity.energy_store = -1
+                if entity.state.p_pos[1] < -self.world_bound:
+                    entity.state.p_pos[1] = -self.world_bound
+                    #entity.energy_store = -1

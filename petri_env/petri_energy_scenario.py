@@ -32,6 +32,7 @@ class PetriEnergyScenario(BaseScenario):
         self.num_agents = config['num_agents']
         self.recov_time = config['recov_time']
         self.use_energy_resource = config['use_energy_resource']
+        self.obs_size = config['obs_size']
         self.action_dim = 1
         self.max_energy = config['max_energy']
         if config["attack_action"]:
@@ -83,7 +84,7 @@ class PetriEnergyScenario(BaseScenario):
             consumes = np.array([1., 0., 0.])
             #produces = np.array([1., 0., 0.])
             if repr_agent is None:
-                policy = CNNLSTMPolicy(obs_dim=8, action_dim=self.action_dim, sigma=self.model_sigma)
+                policy = GCNAttnPolicy(obs_dim=8, action_dim=self.action_dim, sigma=self.model_sigma)
             else:
                 policy = copy.deepcopy(repr_agent.policy)
                 policy.mutate()
@@ -126,7 +127,7 @@ class PetriEnergyScenario(BaseScenario):
         # Agent energy amount
         cell[13, y, x] = agent.energy_store / self.max_energy
 
-
+        cell = self.compress_cell(cell, y, x)
         """
         dirname = os.path.dirname(__file__)
         filename = os.path.join(dirname, 'test.npy')
@@ -139,8 +140,16 @@ class PetriEnergyScenario(BaseScenario):
         """
         return cell
 
+    def compress_cell(self, cell, x, y):
+        # 
+        new_cell = -np.ones((cell.shape[0], 60 + self.obs_size * 2, 60 + self.obs_size * 2)) * 2
+        new_cell[:, self.obs_size:60+self.obs_size, self.obs_size:60+self.obs_size] = cell
+        x += 15
+        y += 15
+        return new_cell[:, y-self.obs_size:y+self.obs_size, x-self.obs_size:x+self.obs_size]
 
-    """
+
+    
     def observation(self, agent, world):
         # GCN observation
         # get positions of all entities in this agent's reference frame
@@ -151,7 +160,7 @@ class PetriEnergyScenario(BaseScenario):
         agents_states = []
         if len(agents) > 0:
             agents_states = self.get_features(agent, agent_id, agents, world.agent_agent_distances, self.get_agent_features)
-
+        agents_states = []
         landmark_states = []
         if len(landmarks) > 0:
             landmark_states = self.get_features(agent, agent_id, landmarks, world.agent_res_distances, self.get_landmark_features)
@@ -160,15 +169,16 @@ class PetriEnergyScenario(BaseScenario):
                 np.array(landmark_states), 
                 np.concatenate([agent.state.p_pos / self.world_bound, 
                         agent.state.p_vel, 
-                        np.array([self.world_bound - agent.state.p_pos[0],
-                                    self.world_bound - agent.state.p_pos[1],
-                                    -self.world_bound - agent.state.p_pos[0],
-                                    -self.world_bound - agent.state.p_pos[1]]) / self.world_bound,
+                        #np.array([self.world_bound - agent.state.p_pos[0],
+                        #            self.world_bound - agent.state.p_pos[1],
+                        #            -self.world_bound - agent.state.p_pos[0],
+                        #            -self.world_bound - agent.state.p_pos[1]]) / self.world_bound,
                         np.array([agent.energy_store]) / self.max_energy, 
                         agent.color, 
                         agent.consumes, 
                         agent.produces])]
-    """
+    
+
     def get_features(self, agent, agent_id, entity_list, distances, feat_func):
 
         acc = []
@@ -202,10 +212,9 @@ class PetriEnergyScenario(BaseScenario):
             print("produced resouce")
 
     def eat_resource(self, agent, world):
-        a_pos = np.array([agent.state.p_pos])
-        r_pos = np.array(world.active_resource_positions)
-        if len(r_pos) > 0:
-            src_dst_dists = euclidean_distances(a_pos, r_pos)[0]
+        if len(world.landmarks) > 0:
+            agent_id = world.agents.index(agent)
+            src_dst_dists = world.agent_res_distances[agent_id]
             closest_idx = np.argmin(src_dst_dists)
             closest_dist = src_dst_dists[closest_idx]
             if closest_dist < self.eating_distance:
@@ -227,13 +236,9 @@ class PetriEnergyScenario(BaseScenario):
 
     def attack_agent(self, agent, world):
         if agent.attack():
-            a_pos = np.array([agent.state.p_pos])
-            other_agents = [a for a in world.agents if a != agent]
-            if len(other_agents) == 0:
-                return
-            r_pos = np.array([a.state.p_pos for a in other_agents])
-            if len(r_pos) > 0:
-                src_dst_dists = euclidean_distances(a_pos, r_pos)[0]
+            if len(world.agents) > 1:
+                agent_id = world.agents.index(agent)
+                src_dst_dists = world.agent_agent_distances[agent_id]
                 closest_idx = np.argmin(src_dst_dists)
                 closest_dist = src_dst_dists[closest_idx]
                 if closest_dist < self.eating_distance:

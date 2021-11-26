@@ -176,7 +176,7 @@ class raw_env(SimpleEnv):
                         # Eat resource
                         self.scenario.attack_agent(agent, world)                            
 
-            sensitivity = 5.0
+            sensitivity = 2.0
             if agent.accel is not None:
                 sensitivity = agent.accel
             agent.action.u *= sensitivity
