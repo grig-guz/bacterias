@@ -8,6 +8,7 @@ import os
 import numpy as np
 import random
 import torch
+import neat
 
 @hydra.main(config_path="conf", config_name="config")
 def my_app(cfg: DictConfig) -> None:
@@ -15,7 +16,14 @@ def my_app(cfg: DictConfig) -> None:
     random.seed(env_config["seed_val"])
     np.random.seed(env_config["seed_val"])
     torch.manual_seed(env_config["seed_val"])
-    env = petri_energy_env.env(env_config)
+    if env_config['use_neat']:
+        neat_config = neat.config.Config(neat.genome.DefaultGenome, neat.reproduction.DefaultReproduction,
+                            neat.species.DefaultSpeciesSet, neat.stagnation.DefaultStagnation,
+                            '/Users/grigoriiguz/projects/bacterias/config_cppn_mountain_car')
+    else:
+        neat_config = None
+    env = petri_energy_env.env(env_config, neat_config)
+
 
     render_test(env)
 

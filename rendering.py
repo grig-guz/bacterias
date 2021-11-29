@@ -11,7 +11,7 @@ def collect_render_results(env, mode):
     results = []
     env.reset()
     actions_buffer = []
-    for i in range(1000000):
+    for i in range(300000):
         for agent in env.agent_iter(env.num_agents):
             obs, reward, done, info = env.last()
             if done:
@@ -19,16 +19,25 @@ def collect_render_results(env, mode):
             else:
                 unwrapped = env.unwrapped
                 with torch.no_grad():
-                    action = unwrapped.world.agents[unwrapped._index_map[agent]].policy(obs)
+                    policy = unwrapped.world.agents[unwrapped._index_map[agent]].policy
+                    if isinstance(policy, torch.nn.Module):
+                        action = unwrapped.world.agents[unwrapped._index_map[agent]].policy(obs)
+                    else:
+                        action = policy.activate(obs)
+                        action = (np.argmax(action[:4]), np.argmax(action[4:]))
+                        
             env.step(action)
             actions_buffer.append(action)
         if i % 10 == 0:
             render_result = env.render(mode=mode)
             results.append(render_result)
+    actions_buffer = np.array(actions_buffer)
+    agent_types = np.array([np.concatenate([agent.consumes, agent.color, agent.produces]) for agent in env.unwrapped.world.agents])
     print(len(actions_buffer))
-    with open(os.path.join(os.getcwd(), "action_store.tmp"), "wb") as f:
-        pickle.dump(actions_buffer, f)
-    
+    with open(os.path.join(os.getcwd(), "env_store.npy"), "wb") as f:
+        np.save(f, actions_buffer)
+        np.save(f, agent_types)
+
     return results
 
 def collect_saved_render_results(env, actions, mode):

@@ -7,7 +7,7 @@ import time
 from pettingzoo.mpe._mpe_utils.scenario import BaseScenario
 from torch._C import _resolve_type_from_object
 
-from petri_env.petri_core import PetriAgent, PetriEnergyAgent, PetriEnergy, PetriMaterial, PetriWorld
+from petri_env.petri_core import PetriEnergyAgent, PetriNeatAgent, PetriMaterial, PetriWorld
 from petri_env.resource_generator import BimodalResourceGenerator, RandomResourceGenerator, FixedResourceGenerator
 from policies.simple_policy import *
 
@@ -20,9 +20,10 @@ BIMODAL_REC_GEN = "bimodal"
 
 class PetriEnergyScenario(BaseScenario):
 
-    def __init__(self, config):
+    def __init__(self, config, neat_config):
         super().__init__()
         self.config = config
+        self.neat_config = neat_config
         self.sigma = config['sigma']
         self.model_sigma = config['model_sigma']
         self.eating_distance = config['eating_distance']
@@ -36,6 +37,7 @@ class PetriEnergyScenario(BaseScenario):
         self.obs_size = config['obs_size']
         self.action_dim = 1
         self.max_energy = config['max_energy']
+        self.use_neat = config['use_neat']
         if config["attack_action"]:
             self.action_dim += 1
         if config["eat_action"]:
@@ -59,16 +61,6 @@ class PetriEnergyScenario(BaseScenario):
         if self.res_gen_type == RANDOM_REC_GEN:
             self.resource_generator = RandomResourceGenerator(self.config, world=world)
             self.resource_generator.generate_initial_resources()
-        elif self.res_gen_type == FIXED_REC_GEN:
-            self.resource_generator = FixedResourceGenerator(self.config, world=world)
-            # add landmarks
-            world.landmarks = [PetriMaterial(loc, color) for loc, color in materials_map.items()] \
-                                + [PetriEnergy(loc) for loc in energy_locs]
-
-            for i, landmark in enumerate(world.landmarks):
-                landmark.name = '%s %d'.format(landmark.__class__.__name__, i)
-                landmark.collide = False
-                landmark.movable = False
         elif self.res_gen_type == BIMODAL_REC_GEN:
             self.resource_generator = BimodalResourceGenerator(self.config, world=world)
             self.resource_generator.generate_initial_resources()
@@ -94,7 +86,9 @@ class PetriEnergyScenario(BaseScenario):
         #    produces = np.array([1., 0., 0.])
         #consumes = np.array([1., 0., 0.])
         #produces = np.array([1., 0., 0.])
-        if repr_agent is None:
+        if repr_agent is None and self.use_neat:
+            agent = PetriNeatAgent(self.config, self.neat_config, loc=loc, consumes=consumes, produces=produces, material=color)
+        elif repr_agent is None:
             policy = GCNAttnPolicy(obs_dim=8, action_dim=self.action_dim, sigma=self.model_sigma)
             agent = PetriEnergyAgent(self.config, loc=loc, consumes=consumes, produces=produces, material=color, policy=policy)
         else:
@@ -123,42 +117,7 @@ class PetriEnergyScenario(BaseScenario):
 
     def reward(self, agent, world):
         return 0
-
-    def observation(self, agent, world):
-        # GCN observation
-        # get positions of all entities in this agent's reference frame
-        cell = copy.deepcopy(world.cell)
-        x, y = agent.state.p_pos
-        x = np.digitize(x, world.bins) - 1
-        y = np.digitize(-y, world.bins) - 1
-        # Agent identity
-        cell[12, y, x] = 1
-        # Agent energy amount
-        cell[13, y, x] = agent.energy_store / self.max_energy
-
-        cell = self.compress_cell(cell, y, x)
-        """
-        dirname = os.path.dirname(__file__)
-        filename = os.path.join(dirname, 'test.npy')
-        with open(filename, 'wb') as f:
-            np.save(f, cell)
-            print("SAVED")
-        if self.count > 0:
-            time.sleep(30)
-        self.count += 1
-        """
-        return cell
-
-    def compress_cell(self, cell, x, y):
-        # 
-        new_cell = -np.ones((cell.shape[0], 60 + self.obs_size * 2, 60 + self.obs_size * 2)) * 2
-        new_cell[:, self.obs_size:60+self.obs_size, self.obs_size:60+self.obs_size] = cell
-        x += 15
-        y += 15
-        return new_cell[:, y-self.obs_size:y+self.obs_size, x-self.obs_size:x+self.obs_size]
-
-
-    
+        
     def observation(self, agent, world):
         # GCN observation
         # get positions of all entities in this agent's reference frame
@@ -169,23 +128,35 @@ class PetriEnergyScenario(BaseScenario):
         landmark_states = []
         if len(landmarks) > 0:
             landmark_states = self.get_features(agent, agent_id, landmarks, world.agent_res_distances, self.get_landmark_features)
+        
+        if self.use_neat:
+            while len(landmark_states) < self.select_by_distance:
+                landmark_states.append(-2 * np.ones(5))
+            landmark_states = np.concatenate(landmark_states)
 
         agents_states = []
         if len(agents) > 0:
             agents_states = self.get_features(agent, agent_id, agents, world.agent_agent_distances, self.get_agent_features)
-
-        return [np.array(agents_states), 
-                np.array(landmark_states), 
-                np.concatenate([agent.state.p_pos / self.world_bound, 
-                        agent.state.p_vel, 
-                        #np.array([self.world_bound - agent.state.p_pos[0],
-                        #            self.world_bound - agent.state.p_pos[1],
-                        #            -self.world_bound - agent.state.p_pos[0],
-                        #            -self.world_bound - agent.state.p_pos[1]]) / self.world_bound,
-                        np.array([agent.energy_store]) / self.max_energy, 
-                        agent.color, 
-                        agent.consumes, 
-                        agent.produces])]
+            while len(agents_states) < self.select_by_distance:
+                agents_states.append(-2 * np.ones(13))
+            agents_states = np.concatenate(agents_states)
+        c_agent_obs = np.concatenate([agent.state.p_pos / self.world_bound, 
+                            agent.state.p_vel, 
+                            #np.array([self.world_bound - agent.state.p_pos[0],
+                            #            self.world_bound - agent.state.p_pos[1],
+                            #            -self.world_bound - agent.state.p_pos[0],
+                            #            -self.world_bound - agent.state.p_pos[1]]) / self.world_bound,
+                            np.array([agent.energy_store]) / self.max_energy, 
+                            agent.color, 
+                            agent.consumes, 
+                            agent.produces])
+        if self.use_neat:
+            obs = np.concatenate([agents_states, landmark_states, c_agent_obs])
+            return obs
+        else:
+            return [np.array(agents_states), 
+                    np.array(landmark_states), 
+                    c_agent_obs]
     
 
     def get_features(self, agent, agent_id, entity_list, distances, feat_func):
@@ -224,7 +195,7 @@ class PetriEnergyScenario(BaseScenario):
             resource.is_waste = True
             agent.consumed_material = False
             world.landmarks.append(resource)
-            print("produced resouce")
+            print("$$$$$ produced resouce")
 
     def eat_resource(self, agent, world):
         if len(world.landmarks) > 0:
@@ -237,7 +208,7 @@ class PetriEnergyScenario(BaseScenario):
 
     def reproduce_agent(self, agent, world):
         if agent.reproduce():
-            print("SUCCESS REPRODUCE, lineage length:", agent.lineage_length + 1)
+            print("***** Reproduced, lineage length:", agent.lineage_length + 1)
             new_agent = copy.deepcopy(agent)
             new_agent.mutate()
             new_agent.step_alive = 0
@@ -250,13 +221,12 @@ class PetriEnergyScenario(BaseScenario):
         return None
 
     def attack_agent(self, agent, world):
-        if agent.attack():
-            if len(world.agents) > 1:
-                agent_id = world.agents.index(agent)
-                src_dst_dists = world.agent_agent_distances[agent_id]
-                closest_idx = np.argmin(src_dst_dists)
-                closest_dist = src_dst_dists[closest_idx]
-                if closest_dist < self.eating_distance:
-                    print("===================================")
-                    print("SUCCESSFUL EATING!")
-                    agent.assign_attack(world.agents[closest_idx])
+        if len(world.agents) > 1:
+            agent_id = world.agents.index(agent)
+            src_dst_dists = world.agent_agent_distances[agent_id]
+            closest_idx = np.argmin(src_dst_dists)
+            closest_dist = src_dst_dists[closest_idx]
+            closest_agent = world.agents[closest_idx]
+            if closest_dist < self.eating_distance and agent.can_attack(closest_agent):
+                print(">>>>> Attacked an agent!")
+                agent.assign_attack(closest_agent)

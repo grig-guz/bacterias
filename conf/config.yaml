@@ -1,8 +1,8 @@
 env_config:
   res_gen_type: random               
   max_cycles: 1000000
-  world_bound: 6
-  eating_distance: 0.4
+  world_bound: 10
+  eating_distance: 0.3
   num_agents: 1
   visibility: 2
   sigma: 0.1
@@ -11,18 +11,20 @@ env_config:
   obs_size: 8
   wrap_around: False
   seed_val: 0
-  select_by_distance: 10
+  select_by_distance: 3
   energy_distance_type: "exp"
+  use_neat: True
 
-  num_resources: 50
+  num_resources: 90
   recov_time: 100
-  max_n_agents: 1
+  max_n_agents: 10
   use_energy_resource: False
   move_cost: 5
   max_energy: 4500
   prod_cost: 250
   reprod_cost: 1505
   idle_cost: 2
+  species_eating_cutoff: 0.2
   attack_cost: 50
   attack_action: True
   eat_action: True

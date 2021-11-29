@@ -14,8 +14,8 @@ import copy
 from collections import defaultdict
 
 def make_env(raw_env):
-    def env(config, **kwargs):
-        env = raw_env(config, **kwargs)
+    def env(config, neat_config, **kwargs):
+        env = raw_env(config, neat_config, **kwargs)
         if env.continuous_actions:
             env = wrappers.ClipOutOfBoundsWrapper(env)
         else:
@@ -26,11 +26,11 @@ def make_env(raw_env):
 
 class raw_env(SimpleEnv):
 
-    def __init__(self, config, continuous_actions=False):
+    def __init__(self, config, neat_config, continuous_actions=False):
         self.config = config
         self.use_energy_resource = config['use_energy_resource']
         self.init_num_agents = config["max_n_agents"]
-        scenario = PetriEnergyScenario(config)
+        scenario = PetriEnergyScenario(config, neat_config)
 
         materials_map = {(-0.5, -0.5): [0.5, 0.5, 0.5],
                          (0.5, 0.5): [0.9, 0.9, 0.9]}
@@ -221,7 +221,7 @@ class raw_env(SimpleEnv):
         if self.viewer is None:
             self.viewer = rendering.Viewer(900, 900)
             print("SET MAX SIZE")
-            self.viewer.set_max_size(7)
+            self.viewer.set_max_size(self.config["world_bound"] + 1)
 
 
         # create rendering geometry

@@ -2,7 +2,8 @@ import numpy as np
 from pettingzoo.mpe._mpe_utils.core import Agent, Landmark, World
 from pettingzoo.utils.agent_selector import agent_selector
 from utils import *
-
+from neat.genome import DefaultGenome
+import neat
 
 class PetriLandmark(Landmark):  # properties of landmark entities
     def __init__(self):
@@ -64,6 +65,7 @@ class PetriEnergyAgent(PetriAgent):
         self.reprod_cost = config['reprod_cost']
         self.attack_cost = config['attack_cost']
         self.energy_distance_type = config['energy_distance_type']
+        self.species_eating_cutoff = config['species_eating_cutoff']
         self.currently_eating = None
         self.currently_attacking = None
         self.lineage_length = 1
@@ -111,21 +113,53 @@ class PetriEnergyAgent(PetriAgent):
             self.idle()
             return False
 
-    def attack(self):
-        if self.energy_store - self.attack_cost < 0:
+    def can_attack(self, agent2):
+        if self.energy_store - self.attack_cost > 0 and self.agent_dist(agent2) > self.species_eating_cutoff:
             self.energy_store -= self.attack_cost
             return True
         else:
             self.idle()
             return False
 
-    def assign_attack(self, agent):
-        self.currently_attacking = agent
+    def agent_dist(self, agent2):
+        dist = np.sum(np.abs(self.consumes - agent2.consumes) + \
+                        np.abs(self.color - agent2.color) + \
+                        np.abs(self.produces - agent2.produces))
 
-    def attack_agent(self, ag):
-        new_energy = self.get_energy_gain(ag.color)
+        return dist / 3
+
+    def assign_attack(self, agent2):
+        self.currently_attacking = agent2
+
+    def attack_agent(self, agent2):
+        new_energy = self.get_energy_gain(agent2.color)
         self.energy_store = min(self.max_energy, self.energy_store + new_energy)
         self.consumed_material = True
+
+
+class PetriNeatAgent(PetriEnergyAgent):
+
+    def __init__(self, config, neat_config, loc, consumes, produces, material, policy=None):
+        super().__init__(config, loc, consumes, produces, material, policy=policy)
+        self.neat_config = neat_config
+        self.genome = DefaultGenome(0)
+        self.genome.fitness = 0
+        self.genome.configure_new(self.neat_config.genome_config)
+        self.policy = neat.nn.FeedForwardNetwork.create(self.genome, self.neat_config)
+
+    def mutate(self):
+        self.color = np.clip(self.color + np.random.uniform(-self.sigma, self.sigma, 3), 0, 1)
+        self.consumes = np.clip(self.consumes + np.random.uniform(-self.sigma, self.sigma, 3), 0, 1)
+        self.produces = np.clip(self.produces + np.random.uniform(-self.sigma, self.sigma, 3), 0, 1)
+        self.energy_store = self.max_energy / 3
+        self.consumed_material = False
+
+        new_genome = DefaultGenome(0)
+        new_genome.fitness = 0
+        new_genome.configure_crossover(self.genome, self.genome, self.neat_config.genome_config)
+        new_genome.mutate(self.neat_config.genome_config)
+        self.genome = new_genome
+        self.policy = neat.nn.FeedForwardNetwork.create(self.genome, self.neat_config)
 
 
 class PetriWorld(World):
