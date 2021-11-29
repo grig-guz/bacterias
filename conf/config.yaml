@@ -2,18 +2,21 @@ env_config:
   res_gen_type: random               
   max_cycles: 1000000
   world_bound: 6
-  eating_distance: 0.2
+  eating_distance: 0.4
   num_agents: 1
-  visibility: 6
-  sigma: 0.2
+  visibility: 2
+  sigma: 0.1
   model_sigma: 0.05
   agent_lifetime: 60
   obs_size: 8
   wrap_around: False
+  seed_val: 0
+  select_by_distance: 10
+  energy_distance_type: "exp"
 
-  num_resources: 150
-  recov_time: 50
-  max_n_agents: 10
+  num_resources: 50
+  recov_time: 100
+  max_n_agents: 1
   use_energy_resource: False
   move_cost: 5
   max_energy: 4500
@@ -21,8 +24,8 @@ env_config:
   reprod_cost: 1505
   idle_cost: 2
   attack_cost: 50
-  attack_action: False
+  attack_action: True
   eat_action: True
-  produce_res_action: False
+  produce_res_action: True
   novelty_buffer_size: 10
   novelty_threshold: 1

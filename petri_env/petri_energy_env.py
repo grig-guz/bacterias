@@ -4,13 +4,12 @@ from pettingzoo.mpe._mpe_utils import rendering
 from pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv
 from pettingzoo.utils.agent_selector import agent_selector
 from petri_env.petri_energy_scenario import PetriEnergyScenario
-from petri_env.petri_core import PetriEnergy, PetriMaterial
-from rendering import make_square
+from petri_env.petri_core import PetriAgent, PetriMaterial
+from rendering import make_square, make_triangle
 import numpy as np
 from gym import spaces
 from pettingzoo.utils import wrappers
 from utils import *
-from random import sample
 import copy
 from collections import defaultdict
 
@@ -79,11 +78,10 @@ class raw_env(SimpleEnv):
         self.world.landmarks = [self.world.landmarks[i] for i, to_keep in enumerate(res_to_keep) if to_keep]
         self.scenario.resource_generator.update_resources()
         self.world.agents = [self.world.agents[i] for i, to_keep in enumerate(ag_to_keep) if to_keep and self.world.agents[i].energy_store > 0] + self.agents_to_add
-        print("Num agents: {} {} {} {}".format(len(self.world.agents), self.env_step, len(self.reproducible_agents), self.num_reproductions))
         self.agents_to_add = []
         self.env_step += 1
         # Added the ability for agents to die.
-        if self.env_step % 5 == 0 and len(self.agents) < self.init_num_agents:
+        if len(self.world.agents) < self.init_num_agents:
             # If ran out of agents, add new one
             if self.reproducible_agents == []:
                 repr_agent = None
@@ -93,6 +91,8 @@ class raw_env(SimpleEnv):
 
         self.world.calculate_distances()
         self.reset_maps()
+        print("Num agents: {} {} {} {}".format(len(self.world.agents), self.env_step, len(self.reproducible_agents), self.num_reproductions))
+
 
     def resolve_collisions(self, res_eating_map):
         # Resolve resource eating collisions
@@ -220,7 +220,8 @@ class raw_env(SimpleEnv):
             return None
         if self.viewer is None:
             self.viewer = rendering.Viewer(900, 900)
-            self.viewer.set_max_size(5)
+            print("SET MAX SIZE")
+            self.viewer.set_max_size(7)
 
 
         # create rendering geometry
@@ -234,57 +235,82 @@ class raw_env(SimpleEnv):
             self.render_geoms = []
             self.render_geoms_xform = []
             for entity in active_entities:
-                if isinstance(entity, PetriEnergy):
-                    geom = rendering.make_circle(entity.size)
-                elif isinstance(entity, PetriMaterial):
-                    geom = make_square(entity.size)
-                else:
-                    geom = rendering.make_circle(entity.size)
-                xform = rendering.Transform()
-                if 'agent' in entity.name:
-                    geom.set_color(*entity.consumes[:3], alpha=0.5)
-                else:
+                if isinstance(entity, PetriMaterial):
+                    geom = make_square(entity.size  * 1)
                     geom.set_color(*entity.color[:3])
-                geom.add_attr(xform)
-                self.render_geoms.append(geom)
-                self.render_geoms_xform.append(xform)
+                    xform = rendering.Transform()
+                    geom.add_attr(xform)
+                    self.render_geoms.append(geom)
+                    self.render_geoms_xform.append(xform)
+                else:
+                    geom_cons = make_triangle(entity.size  * 1.2)
+                    geom_cons.set_color(*entity.consumes[:3], alpha=1)
+
+                    xform = rendering.Transform()
+                    geom_cons.add_attr(xform)
+                    self.render_geoms.append(geom_cons)
+                    self.render_geoms_xform.append(xform)
+
+                    geom_color = rendering.make_circle(entity.size * 1.2)
+                    geom_color.set_color(*entity.color[:3], alpha=1)
+
+                    xform = rendering.Transform()
+                    geom_color.add_attr(xform)
+                    self.render_geoms.append(geom_color)
+                    self.render_geoms_xform.append(xform)
+
+
+                    geom_prod = make_square(entity.size * 1.2)
+                    geom_prod.set_color(*entity.produces[:3], alpha=1)
+
+                    xform = rendering.Transform()
+                    geom_prod.add_attr(xform)
+                    self.render_geoms.append(geom_prod)
+                    self.render_geoms_xform.append(xform)
+
 
             # add geoms to viewer
             self.viewer.geoms = []
             for geom in self.render_geoms:
                 self.viewer.add_geom(geom)
 
-            self.viewer.text_lines = []
-            idx = 0
-            for agent in self.world.agents:
-                if not agent.silent:
-                    tline = rendering.TextLine(self.viewer.window, idx)
-                    self.viewer.text_lines.append(tline)
-                    idx += 1
+            #self.viewer.text_lines = []
+            #idx = 0
+            #for agent in self.world.agents:
+            #    if not agent.silent:
+            #        tline = rendering.TextLine(self.viewer.window, idx)
+            #        self.viewer.text_lines.append(tline)
 
-        alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-        for idx, other in enumerate(self.world.agents):
-            if other.silent:
-                continue
-            if np.all(other.state.c == 0):
-                word = '_'
-            elif self.continuous_actions:
-                word = '[' + ",".join([f"{comm:.2f}" for comm in other.state.c]) + "]"
-            else:
-                word = alphabet[np.argmax(other.state.c)]
+        #alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+        #for idx, other in enumerate(self.world.agents):
+        #    if other.silent:
+        #        continue
+        #    if np.all(other.state.c == 0):
+        #        word = '_'
+        #    elif self.continuous_actions:
+        #        word = '[' + ",".join([f"{comm:.2f}" for comm in other.state.c]) + "]"
+        #    else:
+        #        word = alphabet[np.argmax(other.state.c)]
 
-            message = (other.name + ' sends ' + word + '   ')
+        #    message = (other.name + ' sends ' + word + '   ')
 
-            self.viewer.text_lines[idx].set_text(message)
+        #    self.viewer.text_lines[idx].set_text(message)
 
         # update bounds to center around agent
-        all_poses = [entity.state.p_pos for entity in active_entities]
-        cam_range = np.max(np.abs(np.array(all_poses))) + 1
-        self.viewer.set_max_size(cam_range)
+        #all_poses = [entity.state.p_pos for entity in active_entities]
+        #cam_range = np.max(np.abs(np.array(all_poses))) + 1
+        #self.viewer.set_max_size(8)
         # update geometry positions
+        idx = 0
         for e, entity in enumerate(active_entities):
-            if entity.is_active:
-                self.render_geoms_xform[e].set_translation(*entity.state.p_pos)
+            if isinstance(entity, PetriAgent):
+                self.render_geoms_xform[idx].set_translation(*entity.state.p_pos + np.array([0, 0.15]))
+                self.render_geoms_xform[idx + 1].set_translation(*entity.state.p_pos)
+                self.render_geoms_xform[idx + 2].set_translation(*entity.state.p_pos - np.array([0, 0.15]))
+                idx += 3
+            else:
+                self.render_geoms_xform[idx].set_translation(*entity.state.p_pos)
+                idx += 1
         # render to display or array
         return self.viewer.render(return_rgb_array=mode == 'rgb_array')
 

@@ -42,11 +42,12 @@ class PetriAgent(Agent):
         self.policy = policy
         self.is_active = True
         self.consumed_material = False
+        self.sigma = config['sigma']
 
     def mutate(self):
-        self.color = np.clip(self.color + np.random.uniform(-0.05, 0.05, 3), 0, 1)
-        self.consumes = np.clip(self.consumes + np.random.uniform(-0.05, 0.05, 3), 0, 1)
-        self.produces = np.clip(self.produces + np.random.uniform(-0.05, 0.05, 3), 0, 1)
+        self.color = np.clip(self.color + np.random.uniform(-self.sigma, self.sigma, 3), 0, 1)
+        self.consumes = np.clip(self.consumes + np.random.uniform(-self.sigma, self.sigma, 3), 0, 1)
+        self.produces = np.clip(self.produces + np.random.uniform(-self.sigma, self.sigma, 3), 0, 1)
         self.energy_store = self.max_energy / 3
         self.consumed_material = False
         self.policy.mutate()
@@ -62,12 +63,13 @@ class PetriEnergyAgent(PetriAgent):
         self.prod_cost = config['prod_cost']
         self.reprod_cost = config['reprod_cost']
         self.attack_cost = config['attack_cost']
+        self.energy_distance_type = config['energy_distance_type']
         self.currently_eating = None
         self.currently_attacking = None
         self.lineage_length = 1
 
     def can_produce_resource(self):
-        energy_gain = self.get_energy_gain(self.consumes)
+        energy_gain = self.get_energy_gain(self.produces)
         if self.energy_store - energy_gain > 0 and self.consumed_material:
             self.energy_store -= energy_gain
             return True
@@ -76,10 +78,15 @@ class PetriEnergyAgent(PetriAgent):
             return False
 
     def get_energy_gain(self, color):
-        dist = np.sum(np.abs(self.consumes - color))
-        # Maximum distance is 3 since all colors entries are within [0, 1]
-        # Highest energy it can consume is max_energy / 2
-        new_energy = (3 - dist) / 3 * self.max_energy / 2
+        if self.energy_distance_type == 'l1':
+            dist = np.sum(np.abs(self.consumes - color))
+            # Maximum distance is 3 since all colors entries are within [0, 1]
+            # Highest energy it can consume is max_energy / 2
+            new_energy = (3 - dist) / 3 * self.max_energy / 2
+        elif self.energy_distance_type == 'exp':
+            dist = np.exp(-np.sum(np.square(self.consumes - color))*2)
+            new_energy = dist * self.max_energy
+
         return new_energy
 
     def idle(self):
@@ -138,14 +145,14 @@ class PetriWorld(World):
         self.cell = np.zeros(shape=(14, self.cell_size, self.cell_size))
 
     def calculate_distances(self):
-        self.active_resources = [resource for resource in self.landmarks if resource.is_active]
-        self.active_resource_positions = [resource.state.p_pos for resource in self.landmarks if resource.is_active]
-        self.agent_positions = [agent.state.p_pos for agent in self.agents]
-        self.agent_res_distances = euclidean_distances(self.agent_positions, self.active_resource_positions)
-        self.agent_agent_distances = euclidean_distances(self.agent_positions, self.agent_positions)
+        if len(self.agents) > 0:
+            self.active_resources = [resource for resource in self.landmarks if resource.is_active]
+            self.active_resource_positions = [resource.state.p_pos for resource in self.landmarks if resource.is_active]
+            self.agent_positions = [agent.state.p_pos for agent in self.agents]
+            self.agent_res_distances = euclidean_distances(self.agent_positions, self.active_resource_positions)
+            self.agent_agent_distances = euclidean_distances(self.agent_positions, self.agent_positions)
         
-        #self.active_resources = [resource for resource in self.landmarks if resource.is_active]
-        np.fill_diagonal(self.agent_agent_distances, np.inf)
+            np.fill_diagonal(self.agent_agent_distances, np.inf)
         """
         self.cell = -np.ones(shape=(self.cell.shape))
         for agent in self.agents:

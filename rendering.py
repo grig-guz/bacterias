@@ -3,34 +3,64 @@ import math
 import numpy as np
 import torch
 from pettingzoo.mpe._mpe_utils.rendering import FilledPolygon, PolyLine
+import os
+import pickle
 
 def collect_render_results(env, mode):
+    print("Working directory : {}".format(os.getcwd()))
     results = []
-
     env.reset()
+    actions_buffer = []
     for i in range(1000000):
-        if i > 0:
-            for agent in env.agent_iter(env.num_agents // 2 + 1):
-                obs, reward, done, info = env.last()
-                if done:
-                    action = None
-                else:
-                    unwrapped = env.unwrapped
-                    with torch.no_grad():
-                        action = unwrapped.world.agents[unwrapped._index_map[agent]].policy(obs)
-                env.step(action)
-        if i % 20 == 0:
+        for agent in env.agent_iter(env.num_agents):
+            obs, reward, done, info = env.last()
+            if done:
+                action = None
+            else:
+                unwrapped = env.unwrapped
+                with torch.no_grad():
+                    action = unwrapped.world.agents[unwrapped._index_map[agent]].policy(obs)
+            env.step(action)
+            actions_buffer.append(action)
+        if i % 10 == 0:
             render_result = env.render(mode=mode)
-        #results.append(render_result)
+            results.append(render_result)
+    print(len(actions_buffer))
+    with open(os.path.join(os.getcwd(), "action_store.tmp"), "wb") as f:
+        pickle.dump(actions_buffer, f)
+    
+    return results
 
+def collect_saved_render_results(env, actions, mode):
+    print("Working directory : {}".format(os.getcwd()))
+    results = []
+    env.reset()
+    idx = 0
+    step = 0
+    while idx < len(actions):
+        for _ in env.agent_iter(env.num_agents):
+            _, _, _, _ = env.last()
+            action = actions[idx]
+            env.step(action)
+            idx += 1
+        
+        step += 1
+        if step % 5 == 0:
+            render_result = env.render(mode=mode)
+            results.append(render_result)
     return results
 
 
-def render_test(env, custom_tests={}):
+
+def render_test(env, actions=None, custom_tests={}):
     render_modes = env.metadata.get('render.modes')
     assert render_modes is not None, "Environment's that support rendering must define render modes in metadata"
+    render_modes = ["human"]
     for mode in render_modes:
-        render_results = collect_render_results(env, mode)
+        if actions is None:
+            render_results = collect_render_results(env, mode)
+        else:
+            render_results = collect_saved_render_results(env, actions, mode)
         for res in render_results:
             if mode in custom_tests.keys():
                 assert custom_tests[mode](res)
@@ -55,7 +85,6 @@ def make_star(radius=10, res=30, filled=True):
 
 def make_square(radius=10, res=30, filled=True):
     points = []
-    sq2 = radius * math.sqrt(2)
     points.append((radius, radius))
     points.append((radius, 0))
     points.append((radius, -radius))
@@ -64,6 +93,16 @@ def make_square(radius=10, res=30, filled=True):
     points.append((-radius, 0))
     points.append((-radius, radius))
     points.append((0, radius))
+    if filled:
+        return FilledPolygon(points)
+    else:
+        return PolyLine(points, True)
+
+def make_triangle(radius=10, res=30, filled=True):
+    points = []
+    points.append((0, radius))
+    points.append((radius, -radius))
+    points.append((-radius, -radius))
     if filled:
         return FilledPolygon(points)
     else:

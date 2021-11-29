@@ -8,13 +8,14 @@ from pettingzoo.mpe._mpe_utils.scenario import BaseScenario
 from torch._C import _resolve_type_from_object
 
 from petri_env.petri_core import PetriAgent, PetriEnergyAgent, PetriEnergy, PetriMaterial, PetriWorld
-from petri_env.resource_generator import RandomResourceGenerator, FixedResourceGenerator
+from petri_env.resource_generator import BimodalResourceGenerator, RandomResourceGenerator, FixedResourceGenerator
 from policies.simple_policy import *
 
 from utils import *
 
 RANDOM_REC_GEN = "random"
 FIXED_REC_GEN = "fixed"
+BIMODAL_REC_GEN = "bimodal"
 
 
 class PetriEnergyScenario(BaseScenario):
@@ -43,6 +44,7 @@ class PetriEnergyScenario(BaseScenario):
             self.action_dim += 1
         self.novelty_buffer = []
         self.count = 0
+        self.select_by_distance = config["select_by_distance"]
 
 
 
@@ -67,7 +69,9 @@ class PetriEnergyScenario(BaseScenario):
                 landmark.name = '%s %d'.format(landmark.__class__.__name__, i)
                 landmark.collide = False
                 landmark.movable = False
-
+        elif self.res_gen_type == BIMODAL_REC_GEN:
+            self.resource_generator = BimodalResourceGenerator(self.config, world=world)
+            self.resource_generator.generate_initial_resources()
         else:
             print("Unknown resource generator type")
             raise Exception
@@ -76,29 +80,34 @@ class PetriEnergyScenario(BaseScenario):
         return world            
 
     def add_random_agent(self, world, repr_agent=None):
-        for _ in range(1):
-            loc = np.random.uniform(-self.world_bound, self.world_bound, 2)
-            color = np.array([1., 0., 0.])
-            #consumes = np.random.uniform(0, 1, 3)
-            produces = np.random.uniform(0, 1, 3)
-            consumes = np.array([1., 0., 0.])
-            #produces = np.array([1., 0., 0.])
-            if repr_agent is None:
-                policy = GCNAttnPolicy(obs_dim=8, action_dim=self.action_dim, sigma=self.model_sigma)
-            else:
-                policy = copy.deepcopy(repr_agent.policy)
-                policy.mutate()
-            if self.use_energy_resource:
-                agent = PetriAgent(loc=loc, consumes=consumes, produces=produces, material=color, policy=policy)
-            else:
-                agent = PetriEnergyAgent(self.config, loc=loc, consumes=consumes, produces=produces, material=color, policy=policy)
+        loc = np.random.uniform(-self.world_bound, self.world_bound, 2)
+        color = np.random.uniform(0, 1, 3)
+        consumes = np.random.uniform(0, 1, 3)
+        produces = np.random.uniform(0, 1, 3)
 
-            agent.state.p_vel = np.zeros(2)
-            agent.name = f'agent_{world.agent_counter}'
-            agent.collide = False
-            agent.silent = True
-            world.agents.append(agent)
-            world.agent_counter += 1
+        agent_kind = np.random.choice(2, 1)
+        #if agent_kind == 0:
+        #    consumes = np.array([1., 0., 0.])
+        #    produces = np.array([0., 0., 1.])
+        #else:
+        #    consumes = np.array([0., 0., 1.])
+        #    produces = np.array([1., 0., 0.])
+        #consumes = np.array([1., 0., 0.])
+        #produces = np.array([1., 0., 0.])
+        if repr_agent is None:
+            policy = GCNAttnPolicy(obs_dim=8, action_dim=self.action_dim, sigma=self.model_sigma)
+            agent = PetriEnergyAgent(self.config, loc=loc, consumes=consumes, produces=produces, material=color, policy=policy)
+        else:
+            agent = copy.deepcopy(repr_agent)
+            agent.state.p_pos = loc
+            agent.mutate()
+
+        agent.state.p_vel = np.zeros(2)
+        agent.name = f'agent_{world.agent_counter}'
+        agent.collide = False
+        agent.silent = True
+        world.agents.append(agent)
+        world.agent_counter += 1
 
 
     def reset_world(self, world, np_random):
@@ -157,13 +166,13 @@ class PetriEnergyScenario(BaseScenario):
         agents = world.agents
         agent_id = world.agents.index(agent)
 
-        agents_states = []
-        if len(agents) > 0:
-            agents_states = self.get_features(agent, agent_id, agents, world.agent_agent_distances, self.get_agent_features)
-        agents_states = []
         landmark_states = []
         if len(landmarks) > 0:
             landmark_states = self.get_features(agent, agent_id, landmarks, world.agent_res_distances, self.get_landmark_features)
+
+        agents_states = []
+        if len(agents) > 0:
+            agents_states = self.get_features(agent, agent_id, agents, world.agent_agent_distances, self.get_agent_features)
 
         return [np.array(agents_states), 
                 np.array(landmark_states), 
@@ -182,10 +191,16 @@ class PetriEnergyScenario(BaseScenario):
     def get_features(self, agent, agent_id, entity_list, distances, feat_func):
 
         acc = []
-        selected_list = distances[agent_id] < self.visibility
-        for i, selected in enumerate(selected_list):
-            if selected and agent != entity_list[i]:
-                acc.append(feat_func(entity_list[i], agent))
+        if self.select_by_distance > 0:
+            indices = np.argsort(distances[agent_id])[:self.select_by_distance]
+            for i in indices:
+                if agent != entity_list[i]:
+                    acc.append(feat_func(entity_list[i], agent))
+        else:
+            selected_list = distances[agent_id] < self.visibility
+            for i, selected in enumerate(selected_list):
+                if selected and agent != entity_list[i]:
+                    acc.append(feat_func(entity_list[i], agent))
         return acc
 
     def get_agent_features(self, agent1, agent2):
@@ -242,5 +257,6 @@ class PetriEnergyScenario(BaseScenario):
                 closest_idx = np.argmin(src_dst_dists)
                 closest_dist = src_dst_dists[closest_idx]
                 if closest_dist < self.eating_distance:
+                    print("===================================")
                     print("SUCCESSFUL EATING!")
-                    agent.assign_attack(other_agents[closest_idx])
+                    agent.assign_attack(world.agents[closest_idx])
