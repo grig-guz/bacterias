@@ -185,6 +185,7 @@ class GCNAttnPolicy(GCNPolicy):
 
         act_mov = self.final_linear_mov(self.hx)
         act_inter = self.final_linear_inter(self.hx)
+
         return int(torch.argmax(act_mov)), int(torch.argmax(act_inter))
 
 

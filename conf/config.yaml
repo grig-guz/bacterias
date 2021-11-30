@@ -13,10 +13,11 @@ env_config:
   seed_val: 0
   select_by_distance: 3
   energy_distance_type: "exp"
-  use_neat: True
+  use_neat: False
 
-  num_resources: 90
-  recov_time: 100
+
+  num_resources: 150
+  recov_time: 50
   max_n_agents: 10
   use_energy_resource: False
   move_cost: 5
@@ -24,7 +25,7 @@ env_config:
   prod_cost: 250
   reprod_cost: 1505
   idle_cost: 2
-  species_eating_cutoff: 0.2
+  species_eating_cutoff: 0.5
   attack_cost: 50
   attack_action: True
   eat_action: True

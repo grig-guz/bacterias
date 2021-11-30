@@ -31,12 +31,13 @@ def collect_render_results(env, mode):
         if i % 10 == 0:
             render_result = env.render(mode=mode)
             results.append(render_result)
-    actions_buffer = np.array(actions_buffer)
-    agent_types = np.array([np.concatenate([agent.consumes, agent.color, agent.produces]) for agent in env.unwrapped.world.agents])
-    print(len(actions_buffer))
-    with open(os.path.join(os.getcwd(), "env_store.npy"), "wb") as f:
-        np.save(f, actions_buffer)
-        np.save(f, agent_types)
+        
+        if (i + 1) % 5000 == 0:
+            actions_buffer_np = np.array(actions_buffer)
+            tree_nodes = [agent.tree_node for agent in env.unwrapped.world.agents]
+            with open(os.path.join(os.getcwd(), "env_store.npy"), "wb") as f:
+                pickle.dump([tree_nodes, actions_buffer_np], f)
+
 
     return results
 

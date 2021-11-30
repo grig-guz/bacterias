@@ -77,7 +77,16 @@ class raw_env(SimpleEnv):
 
         self.world.landmarks = [self.world.landmarks[i] for i, to_keep in enumerate(res_to_keep) if to_keep]
         self.scenario.resource_generator.update_resources()
-        self.world.agents = [self.world.agents[i] for i, to_keep in enumerate(ag_to_keep) if to_keep and self.world.agents[i].energy_store > 0] + self.agents_to_add
+        updated_agents = []
+        for i, to_keep in enumerate(ag_to_keep):
+            ag = self.world.agents[i]
+            if to_keep and ag.energy_store > 0:
+                updated_agents.append(ag)
+            else:
+                ag.tree_node = None
+                del ag
+
+        self.world.agents = updated_agents + self.agents_to_add
         self.agents_to_add = []
         self.env_step += 1
         # Added the ability for agents to die.

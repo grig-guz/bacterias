@@ -2,6 +2,7 @@ import numpy as np
 from pettingzoo.mpe._mpe_utils.core import Agent, Landmark, World
 from pettingzoo.utils.agent_selector import agent_selector
 from utils import *
+from petri_env.ancestry_tree import AncenstryTreeNode
 from neat.genome import DefaultGenome
 import neat
 
@@ -44,13 +45,15 @@ class PetriAgent(Agent):
         self.is_active = True
         self.consumed_material = False
         self.sigma = config['sigma']
+        self.tree_node = AncenstryTreeNode()
 
     def mutate(self):
-        self.color = np.clip(self.color + np.random.uniform(-self.sigma, self.sigma, 3), 0, 1)
-        self.consumes = np.clip(self.consumes + np.random.uniform(-self.sigma, self.sigma, 3), 0, 1)
-        self.produces = np.clip(self.produces + np.random.uniform(-self.sigma, self.sigma, 3), 0, 1)
+        self.color = np.clip(self.color + np.random.normal(0, self.sigma, 3), 0, 1)
+        self.consumes = np.clip(self.consumes + np.random.normal(0, self.sigma, 3), 0, 1)
+        self.produces = np.clip(self.produces + np.random.normal(0, self.sigma, 3), 0, 1)
         self.energy_store = self.max_energy / 3
         self.consumed_material = False
+        self.tree_node = AncenstryTreeNode()
         self.policy.mutate()
 
 class PetriEnergyAgent(PetriAgent):
@@ -69,6 +72,7 @@ class PetriEnergyAgent(PetriAgent):
         self.currently_eating = None
         self.currently_attacking = None
         self.lineage_length = 1
+        
 
     def can_produce_resource(self):
         energy_gain = self.get_energy_gain(self.produces)
@@ -86,7 +90,7 @@ class PetriEnergyAgent(PetriAgent):
             # Highest energy it can consume is max_energy / 2
             new_energy = (3 - dist) / 3 * self.max_energy / 2
         elif self.energy_distance_type == 'exp':
-            dist = np.exp(-np.sum(np.square(self.consumes - color))*2)
+            dist = np.exp(-np.sum(np.square(self.consumes - color))*3)
             new_energy = dist * self.max_energy
 
         return new_energy
@@ -148,9 +152,9 @@ class PetriNeatAgent(PetriEnergyAgent):
         self.policy = neat.nn.FeedForwardNetwork.create(self.genome, self.neat_config)
 
     def mutate(self):
-        self.color = np.clip(self.color + np.random.uniform(-self.sigma, self.sigma, 3), 0, 1)
-        self.consumes = np.clip(self.consumes + np.random.uniform(-self.sigma, self.sigma, 3), 0, 1)
-        self.produces = np.clip(self.produces + np.random.uniform(-self.sigma, self.sigma, 3), 0, 1)
+        self.color = np.clip(self.color + np.random.normal(0, self.sigma, 3), 0, 1)
+        self.consumes = np.clip(self.consumes + np.random.normal(0, self.sigma, 3), 0, 1)
+        self.produces = np.clip(self.produces + np.random.normal(0, self.sigma, 3), 0, 1)
         self.energy_store = self.max_energy / 3
         self.consumed_material = False
 

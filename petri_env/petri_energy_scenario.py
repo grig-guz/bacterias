@@ -78,6 +78,7 @@ class PetriEnergyScenario(BaseScenario):
         produces = np.random.uniform(0, 1, 3)
 
         agent_kind = np.random.choice(2, 1)
+
         #if agent_kind == 0:
         #    consumes = np.array([1., 0., 0.])
         #    produces = np.array([0., 0., 1.])
@@ -86,6 +87,7 @@ class PetriEnergyScenario(BaseScenario):
         #    produces = np.array([1., 0., 0.])
         #consumes = np.array([1., 0., 0.])
         #produces = np.array([1., 0., 0.])
+
         if repr_agent is None and self.use_neat:
             agent = PetriNeatAgent(self.config, self.neat_config, loc=loc, consumes=consumes, produces=produces, material=color)
         elif repr_agent is None:
@@ -132,14 +134,14 @@ class PetriEnergyScenario(BaseScenario):
         if self.use_neat:
             while len(landmark_states) < self.select_by_distance:
                 landmark_states.append(-2 * np.ones(5))
-            landmark_states = np.concatenate(landmark_states)
+            landmark_states = np.stack(landmark_states)
 
         agents_states = []
         if len(agents) > 0:
             agents_states = self.get_features(agent, agent_id, agents, world.agent_agent_distances, self.get_agent_features)
             while len(agents_states) < self.select_by_distance:
                 agents_states.append(-2 * np.ones(13))
-            agents_states = np.concatenate(agents_states)
+            agents_states = np.stack(agents_states)
         c_agent_obs = np.concatenate([agent.state.p_pos / self.world_bound, 
                             agent.state.p_vel, 
                             #np.array([self.world_bound - agent.state.p_pos[0],
@@ -217,6 +219,13 @@ class PetriEnergyScenario(BaseScenario):
             new_agent.state.p_vel = np.zeros(world.dim_p)
             new_agent.state.c = np.zeros(world.dim_c)
             new_agent.lineage_length += 1
+
+            new_agent.tree_node.parent = agent.tree_node
+            agent.tree_node.children.append(new_agent.tree_node)
+            new_agent.tree_node.consumes = copy.deepcopy(new_agent.consumes)
+            new_agent.tree_node.produces = copy.deepcopy(new_agent.produces)
+            new_agent.tree_node.color = copy.deepcopy(new_agent.color)
+
             return new_agent
         return None
 
