@@ -72,6 +72,7 @@ class PetriEnergyAgent(PetriAgent):
         self.currently_eating = None
         self.currently_attacking = None
         self.lineage_length = 1
+        self.energy_coef = config['energy_coef']
         
 
     def can_produce_resource(self):
@@ -90,7 +91,7 @@ class PetriEnergyAgent(PetriAgent):
             # Highest energy it can consume is max_energy / 2
             new_energy = (3 - dist) / 3 * self.max_energy / 2
         elif self.energy_distance_type == 'exp':
-            dist = np.exp(-np.sum(np.square(self.consumes - color))*3)
+            dist = np.exp(-np.sum(np.square(self.consumes - color))* self.energy_coef)
             new_energy = dist * self.max_energy
 
         return new_energy

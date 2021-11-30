@@ -14,7 +14,7 @@ env_config:
   select_by_distance: 3
   energy_distance_type: "exp"
   use_neat: False
-
+  energy_coef: 2
 
   num_resources: 150
   recov_time: 50
