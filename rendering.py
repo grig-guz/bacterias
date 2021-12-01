@@ -1,4 +1,3 @@
-import random
 import math
 import numpy as np
 import torch
@@ -6,13 +5,19 @@ from pettingzoo.mpe._mpe_utils.rendering import FilledPolygon, PolyLine
 import os
 import pickle
 
+
 def collect_render_results(env, mode):
     print("Working directory : {}".format(os.getcwd()))
     results = []
     env.reset()
     actions_buffer = []
-    for i in range(300000):
+
+    big_pop_timesteps = 20000
+    big_pop_counter = 0
+
+    for i in range(10000000):
         for agent in env.agent_iter(env.num_agents):
+
             obs, reward, done, info = env.last()
             if done:
                 action = None
@@ -28,15 +33,24 @@ def collect_render_results(env, mode):
                         
             env.step(action)
             actions_buffer.append(action)
-        if i % 10 == 0:
-            render_result = env.render(mode=mode)
-            results.append(render_result)
+
+
+        #if i % 20 == 0:
+        #    render_result = env.render(mode=mode)
+        #    results.append(render_result)
         
-        if (i + 1) % 5000 == 0:
+        if (i + 1) % 1000 == 0:
             actions_buffer_np = np.array(actions_buffer)
             tree_nodes = [agent.tree_node for agent in env.unwrapped.world.agents]
             with open(os.path.join(os.getcwd(), "env_store.npy"), "wb") as f:
                 pickle.dump([tree_nodes, actions_buffer_np], f)
+
+        if len(env.unwrapped.world.agents) > 10:
+            big_pop_counter += 1
+            if big_pop_counter > big_pop_timesteps:
+                break
+        else:
+            big_pop_counter = 0
 
 
     return results

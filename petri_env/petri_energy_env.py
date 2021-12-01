@@ -1,5 +1,4 @@
 import random
-from pettingzoo.utils.conversions import parallel_wrapper_fn
 from pettingzoo.mpe._mpe_utils import rendering
 from pettingzoo.mpe._mpe_utils.simple_env import SimpleEnv
 from pettingzoo.utils.agent_selector import agent_selector
@@ -10,7 +9,6 @@ import numpy as np
 from gym import spaces
 from pettingzoo.utils import wrappers
 from utils import *
-import copy
 from collections import defaultdict
 
 def make_env(raw_env):
@@ -28,8 +26,10 @@ class raw_env(SimpleEnv):
 
     def __init__(self, config, neat_config, continuous_actions=False):
         self.config = config
-        self.use_energy_resource = config['use_energy_resource']
         self.init_num_agents = config["max_n_agents"]
+        self.step_reward = config['step_reward']
+        self.repr_reward = config['repr_reward']
+        self.waste_lifetime = config['waste_lifetime']
         scenario = PetriEnergyScenario(config, neat_config)
 
         materials_map = {(-0.5, -0.5): [0.5, 0.5, 0.5],
@@ -48,6 +48,9 @@ class raw_env(SimpleEnv):
         self.env_step = 0
         self.num_reproductions = 0
 
+    def seed(self, val):
+        pass
+
     def update_world_state(self):
 
         if not self.config['eat_action']:
@@ -57,6 +60,7 @@ class raw_env(SimpleEnv):
         ag_to_keep = [True for _ in range(len(self.world.agents))]
 
         res_eating_map = defaultdict(list)
+        agent_eating_map = defaultdict(list)
         for agent in self.world.agents:
             if agent.currently_eating is not None:
                 landmark = agent.currently_eating
@@ -69,47 +73,104 @@ class raw_env(SimpleEnv):
             elif agent.currently_attacking is not None:
                 a = agent.currently_attacking
                 agent.currently_attacking = None
-                idx = self.world.agents.index(a)
-                ag_to_keep[idx] = False
-                agent.attack_agent(a)
+                agent_eating_map[a].append(agent)
 
-        self.resolve_collisions(res_eating_map)
+        for idx, landmark in enumerate(self.world.landmarks):
+            if landmark.is_waste:
+                landmark.waste_alive_time += 1
 
+                if landmark.waste_alive_time > self.waste_lifetime:
+                    res_to_keep[idx] = False
+
+        ag_to_keep = self.resolve_collisions(res_eating_map, agent_eating_map, ag_to_keep)
+
+        # Update resources
         self.world.landmarks = [self.world.landmarks[i] for i, to_keep in enumerate(res_to_keep) if to_keep]
         self.scenario.resource_generator.update_resources()
+        
+        # Update agents
+        best_5 = None
+        if self.env_step % 10 == 0:
+            best_5 = self.update_reproducible_agents(self.world.agents)
+
         updated_agents = []
         for i, to_keep in enumerate(ag_to_keep):
             ag = self.world.agents[i]
+            ag.reward += self.step_reward
             if to_keep and ag.energy_store > 0:
                 updated_agents.append(ag)
             else:
                 ag.tree_node = None
                 del ag
-
+                
         self.world.agents = updated_agents + self.agents_to_add
         self.agents_to_add = []
         self.env_step += 1
         # Added the ability for agents to die.
         if len(self.world.agents) < self.init_num_agents:
             # If ran out of agents, add new one
-            if self.reproducible_agents == []:
+            if len(self.reproducible_agents) == 0:
                 repr_agent = None
             else:
                 repr_agent = random.sample(self.reproducible_agents, 1)[0]
-            self.scenario.add_random_agent(self.world, repr_agent=repr_agent)
+            self.scenario.add_random_agent(self.world, self.env_step, repr_agent=repr_agent)
+
 
         self.world.calculate_distances()
         self.reset_maps()
-        print("Num agents: {} {} {} {}".format(len(self.world.agents), self.env_step, len(self.reproducible_agents), self.num_reproductions))
+        print("Num agents: {} {} {} {} {}".format(len(self.world.agents), self.env_step, len(self.reproducible_agents), self.num_reproductions, best_5))
 
 
-    def resolve_collisions(self, res_eating_map):
+    def resolve_collisions(self, res_eating_map, agent_eating_map, ag_to_keep):
         # Resolve resource eating collisions
         for res, agents in res_eating_map.items():
-            agent = random.sample(agents, 1)[0]
+            dists = np.array([np.sum(np.square(res.state.p_pos - agent.state.p_pos)) for agent in agents])
+            ag_idx = np.argmin(dists)
+            agent = agents[ag_idx]
             agent.eat(res)
+        
         # Resolve agent attacking collisions
+        colliding_pairs = []
+        for ag, agents in agent_eating_map.items():
+            dists = np.array([np.sum(np.square(ag.state.p_pos - agent.state.p_pos)) for agent in agents])
+            ag_idx = np.argmin(dists)
+            agent = agents[ag_idx]
+            if agent in agent_eating_map and ag in agent_eating_map[agent]:
+                # Attacking each other at the same time
+                colliding_pairs.append((ag, agent))
+            else:
+                agent.attack_agent(ag)
+                idx = self.world.agents.index(ag)
+                ag_to_keep[idx] = False
 
+        for pair in colliding_pairs:
+            ag1, ag2 = pair
+            if (not ag1.dead) and (not ag2.dead):
+                if ag1.energy_store > ag2.energy_store:
+                    attacker, lost = ag1, ag2 
+                else:
+                    attacker, lost = ag2, ag1
+                attacker.attack_agent(lost) 
+                idx = self.world.agents.index(lost)
+                lost.dead = True
+                ag_to_keep[idx] = False
+
+        return ag_to_keep
+
+    def update_reproducible_agents(self, updated_agents):
+        # Select top 50 agents
+        for a in updated_agents:
+            if a not in self.reproducible_agents:
+                self.reproducible_agents.append(a)
+        
+        self.reproducible_agents = list(self.reproducible_agents)
+        all_rewards = np.array([a.reward for a in self.reproducible_agents])
+        best_ag_indices = np.argsort(all_rewards)[-10:]
+        self.reproducible_agents = [self.reproducible_agents[i] for i in best_ag_indices]
+        best_5 = [ag.reward for ag in self.reproducible_agents[-5:]]
+        self.reproducible_agents = self.reproducible_agents
+
+        return best_5
 
     def _execute_world_step(self):
         # set action for each agent
@@ -160,14 +221,13 @@ class raw_env(SimpleEnv):
                 # Agency variations:
                 if interact_act == 0:
                     # Reproduce
-                    a = self.scenario.reproduce_agent(agent, world)
+                    a = self.scenario.reproduce_agent(agent, world, self.env_step)
                     if a is not None:
                         self.num_reproductions += 1
                         self.agents_to_add.append(a)
-                        saved_ag = copy.deepcopy(agent)
-                        saved_ag.lineage_length = 1
-                        self.reproducible_agents.append(saved_ag)
-                        self.reproducible_agents = self.reproducible_agents[-50:]
+
+                        # Store the agent if it reproduced properly
+                        agent.reward += self.repr_reward
                 act_id = 0
                 if self.config["produce_res_action"]:
                     act_id += 1
@@ -229,7 +289,6 @@ class raw_env(SimpleEnv):
             return None
         if self.viewer is None:
             self.viewer = rendering.Viewer(900, 900)
-            print("SET MAX SIZE")
             self.viewer.set_max_size(self.config["world_bound"] + 1)
 
 
@@ -283,32 +342,7 @@ class raw_env(SimpleEnv):
             for geom in self.render_geoms:
                 self.viewer.add_geom(geom)
 
-            #self.viewer.text_lines = []
-            #idx = 0
-            #for agent in self.world.agents:
-            #    if not agent.silent:
-            #        tline = rendering.TextLine(self.viewer.window, idx)
-            #        self.viewer.text_lines.append(tline)
 
-        #alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-        #for idx, other in enumerate(self.world.agents):
-        #    if other.silent:
-        #        continue
-        #    if np.all(other.state.c == 0):
-        #        word = '_'
-        #    elif self.continuous_actions:
-        #        word = '[' + ",".join([f"{comm:.2f}" for comm in other.state.c]) + "]"
-        #    else:
-        #        word = alphabet[np.argmax(other.state.c)]
-
-        #    message = (other.name + ' sends ' + word + '   ')
-
-        #    self.viewer.text_lines[idx].set_text(message)
-
-        # update bounds to center around agent
-        #all_poses = [entity.state.p_pos for entity in active_entities]
-        #cam_range = np.max(np.abs(np.array(all_poses))) + 1
-        #self.viewer.set_max_size(8)
         # update geometry positions
         idx = 0
         for e, entity in enumerate(active_entities):
@@ -325,4 +359,3 @@ class raw_env(SimpleEnv):
 
 
 env = make_env(raw_env)
-parallel_env = parallel_wrapper_fn(env)

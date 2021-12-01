@@ -147,7 +147,6 @@ class GCNAttnPolicy(GCNPolicy):
         self.hx = torch.zeros(1, self.hid_dim)
         self.cx = torch.zeros(1, self.hid_dim)
 
-
     def forward(self, obs):
         agents_obs, landmarks_obs, c_agent_obs = obs
         agents_obs = torch.tensor(agents_obs).float()

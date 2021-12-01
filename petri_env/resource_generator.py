@@ -1,4 +1,3 @@
-from hashlib import new
 import numpy as np
 from petri_env.petri_core import PetriEnergy, PetriMaterial
 from numpy.random import multivariate_normal
@@ -9,7 +8,6 @@ class ResourceGenerator():
         self.world = world
         self.recov_time = config['recov_time']
         self.world_bound = config['world_bound']
-        self.use_energy_resource = config['use_energy_resource']
 
     def generate_initial_resources(self):
         raise NotImplementedError
@@ -39,13 +37,9 @@ class RandomResourceGenerator(ResourceGenerator):
         while len(self.world.landmarks) < self.num_resources:
             resource_kind = np.random.choice(2, 1)
             loc = np.random.uniform(-self.world_bound, self.world_bound, 2)
-            if resource_kind == 0 and self.use_energy_resource:
-                # Energy
-                new_resource = PetriEnergy(loc)
-            else:
-                color = np.random.uniform(0, 1, 3)
-                #color = np.array([1., 0., 0.])
-                new_resource = PetriMaterial(loc, color)
+            #color = np.random.uniform(0, 1, 3)
+            color = np.array([1., 0., 0.])
+            new_resource = PetriMaterial(loc, color)
 
             self.world.landmarks.append(new_resource)
             self.activate_resource(new_resource)

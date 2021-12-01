@@ -16,6 +16,7 @@ def my_app(cfg, actions) -> None:
     random.seed(env_config["seed_val"])
     np.random.seed(env_config["seed_val"])
     torch.manual_seed(env_config["seed_val"])
+    
     env = petri_energy_env.env(env_config)
 
     render_test(env, actions)

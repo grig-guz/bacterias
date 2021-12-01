@@ -8,6 +8,7 @@ class AncenstryTreeNode():
         self.produces = None
         self.color = None
         self.children = []    
-
+        self.timestep = 0
+        
     
     

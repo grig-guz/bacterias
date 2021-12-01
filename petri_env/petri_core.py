@@ -3,8 +3,6 @@ from pettingzoo.mpe._mpe_utils.core import Agent, Landmark, World
 from pettingzoo.utils.agent_selector import agent_selector
 from utils import *
 from petri_env.ancestry_tree import AncenstryTreeNode
-from neat.genome import DefaultGenome
-import neat
 
 class PetriLandmark(Landmark):  # properties of landmark entities
     def __init__(self):
@@ -30,7 +28,7 @@ class PetriMaterial(PetriLandmark):
         self.state.p_pos = np.array(loc)
         self.color = np.array(color)
         self.is_waste = False
-
+        self.waste_alive_time = 0
 
 class PetriAgent(Agent):
 
@@ -46,6 +44,7 @@ class PetriAgent(Agent):
         self.consumed_material = False
         self.sigma = config['sigma']
         self.tree_node = AncenstryTreeNode()
+        self.reward = 0
 
     def mutate(self):
         self.color = np.clip(self.color + np.random.normal(0, self.sigma, 3), 0, 1)
@@ -54,6 +53,7 @@ class PetriAgent(Agent):
         self.energy_store = self.max_energy / 3
         self.consumed_material = False
         self.tree_node = AncenstryTreeNode()
+        self.reward = 0
         self.policy.mutate()
 
 class PetriEnergyAgent(PetriAgent):
@@ -73,7 +73,8 @@ class PetriEnergyAgent(PetriAgent):
         self.currently_attacking = None
         self.lineage_length = 1
         self.energy_coef = config['energy_coef']
-        
+        self.consumption_threshold = config['consumption_threshold']
+        self.dead = False
 
     def can_produce_resource(self):
         energy_gain = self.get_energy_gain(self.produces)
@@ -103,7 +104,8 @@ class PetriEnergyAgent(PetriAgent):
         self.energy_store -= self.move_cost
 
     def assign_eat(self, idx, world):
-        self.currently_eating = world.active_resources[idx]
+        if self.can_consume(world.active_resources[idx].color):
+            self.currently_eating = world.active_resources[idx]
 
     def eat(self, landmark):
         new_energy = self.get_energy_gain(landmark.color)
@@ -119,19 +121,25 @@ class PetriEnergyAgent(PetriAgent):
             return False
 
     def can_attack(self, agent2):
-        if self.energy_store - self.attack_cost > 0 and self.agent_dist(agent2) > self.species_eating_cutoff:
+        if self.energy_store - self.attack_cost > 0 and self.agent_dist(agent2) > self.species_eating_cutoff and self.can_consume(agent2.color):
             self.energy_store -= self.attack_cost
             return True
         else:
             self.idle()
             return False
 
+    def can_consume(self, color):
+        if self.consumption_threshold == 0:
+            return True
+        else:
+            return np.sum(np.abs(self.consumes - color)) < self.consumption_threshold
+
     def agent_dist(self, agent2):
         dist = np.sum(np.abs(self.consumes - agent2.consumes) + \
                         np.abs(self.color - agent2.color) + \
                         np.abs(self.produces - agent2.produces))
 
-        return dist / 3
+        return dist
 
     def assign_attack(self, agent2):
         self.currently_attacking = agent2
@@ -174,14 +182,7 @@ class PetriWorld(World):
         self.world_bound = config['world_bound']
         self.eating_distace = config['eating_distance']
         self.wrap_around = config['wrap_around']
-        start = -self.world_bound
-        bins = []
-        while start < self.world_bound:
-            bins.append(start)
-            start += 0.1
-        self.bins = np.array(bins)
-        self.cell_size = int(self.world_bound * 2 / 0.1)
-        self.cell = np.zeros(shape=(14, self.cell_size, self.cell_size))
+
 
     def calculate_distances(self):
         if len(self.agents) > 0:
@@ -190,24 +191,9 @@ class PetriWorld(World):
             self.agent_positions = [agent.state.p_pos for agent in self.agents]
             self.agent_res_distances = euclidean_distances(self.agent_positions, self.active_resource_positions)
             self.agent_agent_distances = euclidean_distances(self.agent_positions, self.agent_positions)
-        
+            
             np.fill_diagonal(self.agent_agent_distances, np.inf)
-        """
-        self.cell = -np.ones(shape=(self.cell.shape))
-        for agent in self.agents:
-            x, y = agent.state.p_pos
-            x = np.digitize(x, self.bins) - 1
-            y = np.digitize(-y, self.bins) - 1
-            self.cell[:3, y, x] = agent.color
-            self.cell[3:6, y, x] = agent.consumes
-            self.cell[6:9, y, x] = agent.produces
-        
-        for landmark in self.active_resources:
-            x, y = landmark.state.p_pos
-            x = np.digitize(x, self.bins) - 1
-            y = np.digitize(-y, self.bins) - 1
-            self.cell[9:12, y, x] = landmark.color
-        """
+
     # update state of the world
     def step(self):
         # set actions for scripted agents
