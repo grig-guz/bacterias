@@ -32,16 +32,7 @@ class raw_env(SimpleEnv):
         self.waste_lifetime = config['waste_lifetime']
         scenario = PetriEnergyScenario(config, neat_config)
 
-        materials_map = {(-0.5, -0.5): [0.5, 0.5, 0.5],
-                         (0.5, 0.5): [0.9, 0.9, 0.9]}
-
-        energy_locs = [(0.3, 0.3), (0.1, 0.1), 
-                        np.random.uniform(-1, 1, 2), 
-                        np.random.uniform(-1, 1, 2), 
-                        np.random.uniform(-1, 1, 2), 
-                        np.random.uniform(-1, 1, 2)]
-
-        world = scenario.make_world(materials_map=materials_map, energy_locs=energy_locs)
+        world = scenario.make_world()
         self.reproducible_agents = []
         super().__init__(scenario, world, config['max_cycles'], continuous_actions)
         self.metadata['name'] = "petri_env"

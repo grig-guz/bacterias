@@ -64,14 +64,6 @@ class PetriEnergyScenario(BaseScenario):
 
     def add_random_agent(self, world, timestep, repr_agent=None):
         loc = np.random.uniform(-self.world_bound, self.world_bound, 2)
-        #if agent_kind == 0:
-        #    consumes = np.array([1., 0., 0.])
-        #    produces = np.array([0., 0., 1.])
-        #else:
-        #    consumes = np.array([0., 0., 1.])
-        #    produces = np.array([1., 0., 0.])
-        #consumes = np.array([1., 0., 0.])
-        #produces = np.array([1., 0., 0.])
         color = np.random.uniform(0, 1, 3)
         consumes = np.random.uniform(0, 1, 3)
         produces = np.random.uniform(0, 1, 3)
@@ -118,10 +110,6 @@ class PetriEnergyScenario(BaseScenario):
             agents_states = np.stack(agents_states)
         c_agent_obs = np.concatenate([agent.state.p_pos / self.world_bound, 
                             agent.state.p_vel, 
-                            #np.array([self.world_bound - agent.state.p_pos[0],
-                            #            self.world_bound - agent.state.p_pos[1],
-                            #            -self.world_bound - agent.state.p_pos[0],
-                            #            -self.world_bound - agent.state.p_pos[1]]) / self.world_bound,
                             np.array([agent.energy_store]) / self.max_energy, 
                             agent.color, 
                             agent.consumes, 
@@ -142,7 +130,7 @@ class PetriEnergyScenario(BaseScenario):
         return acc
 
     def get_agent_features(self, agent1, agent2):
-        dist_diff = (agent1.state.p_pos - agent2.state.p_pos)#/ self.world_bound
+        dist_diff = (agent1.state.p_pos - agent2.state.p_pos)
         vel = agent1.state.p_vel
         color = agent1.color
         consumes = agent1.consumes
@@ -150,7 +138,7 @@ class PetriEnergyScenario(BaseScenario):
         return np.concatenate([dist_diff, vel, color, consumes, produces])
 
     def get_landmark_features(self, landmark, agent):
-        dist_diff = (landmark.state.p_pos -  agent.state.p_pos)# / self.world_bound
+        dist_diff = (landmark.state.p_pos -  agent.state.p_pos)
         color = landmark.color
         return np.concatenate([dist_diff, color])
 
@@ -185,13 +173,13 @@ class PetriEnergyScenario(BaseScenario):
             new_agent.state.c = np.zeros(world.dim_c)
             new_agent.lineage_length += 1
 
-            #new_agent.tree_node.parent = agent.tree_node
-            #agent.tree_node.children.append(new_agent.tree_node)
+            new_agent.tree_node.parent = agent.tree_node
+            agent.tree_node.children.append(new_agent.tree_node)
             
-            #new_agent.tree_node.consumes = copy.deepcopy(new_agent.consumes)
-            #new_agent.tree_node.produces = copy.deepcopy(new_agent.produces)
-            #new_agent.tree_node.color = copy.deepcopy(new_agent.color)
-            #new_agent.tree_node.timestep = timestep
+            new_agent.tree_node.consumes = copy.deepcopy(new_agent.consumes)
+            new_agent.tree_node.produces = copy.deepcopy(new_agent.produces)
+            new_agent.tree_node.color = copy.deepcopy(new_agent.color)
+            new_agent.tree_node.timestep = timestep
             return new_agent
         return None
 
