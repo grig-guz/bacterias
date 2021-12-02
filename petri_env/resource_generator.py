@@ -1,5 +1,5 @@
 import numpy as np
-from petri_env.petri_core import PetriEnergy, PetriMaterial
+from petri_env.petri_core import PetriMaterial
 from numpy.random import multivariate_normal
 
 class ResourceGenerator():
@@ -70,20 +70,6 @@ class BimodalResourceGenerator(ResourceGenerator):
             new_resource = PetriMaterial(loc, color)
             self.world.landmarks.append(new_resource)
             self.activate_resource(new_resource)
-
-    def activate_resource(self, resource):
-        #new_loc = np.random.uniform(-self.world_bound, self.world_bound, 2)
-        #resource.state.p_pos = new_loc
-        resource.is_active = True
-        resource.inactive_count = 0
-
-class FixedResourceGenerator(ResourceGenerator):
-
-    def __init__(self, config, world):
-        super().__init__(config, world)
-
-    def generate_initial_resources(self, locs, types):
-        return 
 
     def activate_resource(self, resource):
         resource.is_active = True

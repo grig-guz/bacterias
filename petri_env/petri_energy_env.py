@@ -8,7 +8,6 @@ from rendering import make_square, make_triangle
 import numpy as np
 from gym import spaces
 from pettingzoo.utils import wrappers
-from utils import *
 from collections import defaultdict
 
 def make_env(raw_env):
@@ -193,9 +192,6 @@ class raw_env(SimpleEnv):
                 agent.action.u[1] += action[0][3] - action[0][4]
             else:
                 # process discrete action
-                #if move_act == 0:
-                    #print("idle", agent.energy_store)
-                #    agent.idle()
                 if move_act == 0:
                     agent.action.u[0] = -1.0
                     agent.move()
@@ -245,14 +241,14 @@ class raw_env(SimpleEnv):
         assert len(action) == 0
 
     def observe(self, agent):
-        return self.scenario.observation(self.world.agents[self._index_map[agent]], self.world)#.astype(np.float32)
+        return self.scenario.observation(self.world.agents[self._index_map[agent]], self.world)
 
     def reset_maps(self):
         self.agents = [agent.name for agent in self.world.agents]
         self._agent_selector = agent_selector(self.agents)
-        self.possible_agents = self.agents[:]
         self._index_map = {agent.name: idx for idx, agent in enumerate(self.world.agents)}
         self._cumulative_rewards = {name: 0. for name in self.agents}
+
 
         self.dones = {name: False for name in self.agents}
         self.infos = {name: {} for name in self.agents}
@@ -288,9 +284,7 @@ class raw_env(SimpleEnv):
         self.render_geoms_xform = None
         active_entities = [ent for ent in self.world.entities if ent.is_active]
         if self.render_geoms is None:
-            # import rendering only if we need it (and don't import for headless machines)
-            # from gym.envs.classic_control import rendering
-            # from multiagent._mpe_utils import rendering
+
             self.render_geoms = []
             self.render_geoms_xform = []
             for entity in active_entities:

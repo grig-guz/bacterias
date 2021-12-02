@@ -1,18 +1,11 @@
 import numpy as np
 import copy
-import os
-np.set_printoptions(threshold=np.inf)
-
 from pettingzoo.mpe._mpe_utils.scenario import BaseScenario
-
-from petri_env.petri_core import PetriEnergyAgent, PetriNeatAgent, PetriMaterial, PetriWorld
-from petri_env.resource_generator import BimodalResourceGenerator, RandomResourceGenerator, FixedResourceGenerator
+from petri_env.petri_core import PetriEnergyAgent, PetriMaterial, PetriWorld
+from petri_env.resource_generator import BimodalResourceGenerator, RandomResourceGenerator
 from policies.simple_policy import *
 
-from utils import *
-
 RANDOM_REC_GEN = "random"
-FIXED_REC_GEN = "fixed"
 BIMODAL_REC_GEN = "bimodal"
 
 
@@ -42,7 +35,7 @@ class PetriEnergyScenario(BaseScenario):
 
 
 
-    def make_world(self, materials_map, energy_locs):
+    def make_world(self):
         world = PetriWorld(self.config)
         # add agents
         world.agents = []
