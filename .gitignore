@@ -1,4 +1,4 @@
-
+*.png
 *.pyc
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -7,7 +7,8 @@ __pycache__/
 outputs/
 # C extensions
 *.so
-
+*.ipynb
+*.npy
 # Distribution / packaging
 .Python
 build/

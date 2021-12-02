@@ -1,27 +1,35 @@
 env_config:
   res_gen_type: random               
   max_cycles: 1000000
-  agents_produce_resources: true
-  world_bound: 3
-  eating_distance: 0.2
-  num_agents: 1
-  visibility: 6
-  sigma: 0.2
+  world_bound: 8
+  eating_distance: 0.3
+  visibility: 2
+  sigma: 0.05
   model_sigma: 0.05
-  num_resources: 110
+  wrap_around: False
+  select_by_distance: 3
+  energy_distance_type: "exp"
+  step_reward: 5
+  repr_reward: 1000
+  attack_action: True
+  eat_action: True
+  produce_res_action: True
+  waste_lifetime: 2000
+
+
+  num_resources: 100
   recov_time: 50
-  agent_lifetime: 125
-  max_n_agents: 10
-  
-  use_energy_resource: False
+  max_n_agents: 5
   move_cost: 5
-  max_energy: 2400
+  max_energy: 4500
   prod_cost: 250
-  reprod_cost: 805
+  reprod_cost: 1505
   idle_cost: 2
   attack_cost: 50
-  attack_action: False
-  eat_action: True
-  produce_res_action: False
-  novelty_buffer_size: 10
-  novelty_threshold: 1
+
+  energy_coef: 2
+  consumption_threshold: 1.35
+  species_eating_cutoff: 1.8
+  seed_val: 2
+
+
