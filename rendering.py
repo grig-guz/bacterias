@@ -12,7 +12,7 @@ def collect_render_results(env, mode):
     env.reset()
     actions_buffer = []
 
-    big_pop_timesteps = 20000
+    big_pop_timesteps = 8000
     big_pop_counter = 0
 
     for i in range(10000000):
@@ -62,6 +62,7 @@ def collect_saved_render_results(env, actions, mode):
     idx = 0
     step = 0
     while idx < len(actions):
+
         for _ in env.agent_iter(env.num_agents):
             _, _, _, _ = env.last()
             action = actions[idx]
@@ -69,9 +70,12 @@ def collect_saved_render_results(env, actions, mode):
             idx += 1
         
         step += 1
-        if step % 5 == 0:
-            render_result = env.render(mode=mode)
-            results.append(render_result)
+        #if idx % 20 == 0:
+        render_result = env.render(mode=mode)
+        results.append(render_result)
+        if step == 1:
+            input("Press Enter to continue...")
+
     return results
 
 

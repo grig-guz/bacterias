@@ -185,13 +185,13 @@ class PetriEnergyScenario(BaseScenario):
             new_agent.state.c = np.zeros(world.dim_c)
             new_agent.lineage_length += 1
 
-            new_agent.tree_node.parent = agent.tree_node
-            agent.tree_node.children.append(new_agent.tree_node)
+            #new_agent.tree_node.parent = agent.tree_node
+            #agent.tree_node.children.append(new_agent.tree_node)
             
-            new_agent.tree_node.consumes = copy.deepcopy(new_agent.consumes)
-            new_agent.tree_node.produces = copy.deepcopy(new_agent.produces)
-            new_agent.tree_node.color = copy.deepcopy(new_agent.color)
-            new_agent.tree_node.timestep = timestep
+            #new_agent.tree_node.consumes = copy.deepcopy(new_agent.consumes)
+            #new_agent.tree_node.produces = copy.deepcopy(new_agent.produces)
+            #new_agent.tree_node.color = copy.deepcopy(new_agent.color)
+            #new_agent.tree_node.timestep = timestep
             return new_agent
         return None
 

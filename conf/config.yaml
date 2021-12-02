@@ -27,7 +27,7 @@ env_config:
   idle_cost: 2
   attack_cost: 50
 
-  energy_coef: 1
+  energy_coef: 2
   consumption_threshold: 1.35
   species_eating_cutoff: 1.8
   seed_val: 2
