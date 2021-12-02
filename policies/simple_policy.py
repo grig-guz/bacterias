@@ -12,7 +12,7 @@ class PetriPolicy(nn.Module):
         self.sigma = sigma
 
     def mutate(self):
-        for name, W in self.state_dict().items():
+        for _, W in self.state_dict().items():
             eps = torch.randn(size=W.shape)
             W += eps * self.sigma
 
@@ -44,8 +44,6 @@ class GCNPolicy(PetriPolicy):
         self.final_linear = nn.Linear(96, action_dim)
         self.lstm = nn.LSTMCell(96, 96)
 
-
-
     def forward(self, obs):
         agents_obs, landmarks_obs, c_agent_obs = obs
         agents_obs = torch.tensor(agents_obs).float()
@@ -73,58 +71,6 @@ class GCNPolicy(PetriPolicy):
         inpt = self.relu(outer_layer(inpt))
         return inpt
 
-class GCNLSTMPolicy(PetriPolicy):
-
-    def __init__(self, obs_dim, action_dim, sigma):
-        super().__init__(sigma)
-        self.relu = nn.LeakyReLU()
-        self.hid_dim = 32
-        self.agents_linear = nn.Linear(13, self.hid_dim)
-        self.landmarks_linear = nn.Linear(5, self.hid_dim)
-        self.agg_agents_linear = nn.Linear(self.hid_dim, self.hid_dim)
-        self.agg_landmarks_linear = nn.Linear(self.hid_dim, self.hid_dim)
-        self.c_agent_linear = nn.Linear(18, self.hid_dim)
-        self.final_linear_mov = nn.Linear(self.hid_dim * 3, 4)
-        self.final_linear_inter = nn.Linear(self.hid_dim * 3, action_dim)
-        self.lstm = nn.LSTMCell(self.hid_dim * 3, self.hid_dim * 3)
-        self.hx = torch.zeros(1, self.hid_dim * 3)
-        self.cx = torch.zeros(1, self.hid_dim * 3)
-
-
-    def forward(self, obs):
-        agents_obs, landmarks_obs, c_agent_obs = obs
-        agents_obs = torch.tensor(agents_obs).float()
-        landmarks_obs = torch.tensor(landmarks_obs).float()
-        c_agent_obs = torch.tensor(c_agent_obs).float()
-        if agents_obs.nelement() == 0:
-            agents_obs = torch.zeros(self.hid_dim)
-        else:
-            agents_obs = self.agg_func(agents_obs, self.agents_linear, self.agg_agents_linear)
-
-        if landmarks_obs.nelement() == 0:
-            landmarks_obs = torch.zeros(self.hid_dim)
-        else:
-            landmarks_obs = self.agg_func(landmarks_obs, self.landmarks_linear, self.agg_landmarks_linear)
-
-        c_agent_obs = self.c_agent_linear(c_agent_obs)
-
-        obs = torch.cat([agents_obs, landmarks_obs, c_agent_obs])
-        self.hx, self.cx = self.lstm(obs.unsqueeze(0), (self.hx, self.cx))
-        act_mov = self.final_linear_mov(self.hx)
-        act_inter = self.final_linear_inter(self.hx)
-        return int(torch.argmax(act_mov)), int(torch.argmax(act_inter))
-
-    def agg_func(self, inpt, inner_layer, outer_layer):
-        inpt = self.relu(inner_layer(inpt))
-        inpt = torch.mean(inpt, dim=0)
-        inpt = self.relu(outer_layer(inpt))
-        return inpt
-
-    def mutate(self):
-        super().mutate()
-        self.hx = torch.zeros(1, self.hid_dim * 3)
-        self.cx = torch.zeros(1, self.hid_dim * 3)
-        
 class GCNAttnPolicy(GCNPolicy):
 
     def __init__(self, obs_dim, action_dim, sigma):
@@ -186,47 +132,3 @@ class GCNAttnPolicy(GCNPolicy):
         act_inter = self.final_linear_inter(self.hx)
 
         return int(torch.argmax(act_mov)), int(torch.argmax(act_inter))
-
-
-class CNNLSTMPolicy(PetriPolicy):
-
-    def __init__(self, obs_dim, action_dim, sigma):
-        super().__init__(sigma)
-        self.relu = nn.ReLU()
-        self.hid_dim = 160
-        self.cnn1 = nn.Conv2d(14, 20, 2, 1)
-        self.cnn2 = nn.Conv2d(20, 20, 2, 2)
-        self.cnn3 = nn.Conv2d(20, 20, 2, 2)
-        self.cnn4 = nn.Conv2d(20, 20, 2, 2)
-        self.linear_reduce = nn.Linear(180, self.hid_dim)
-        self.final_linear_mov = nn.Linear(self.hid_dim, 4)
-        self.final_linear_inter = nn.Linear(self.hid_dim, action_dim)
-        self.lstm = nn.LSTMCell(self.hid_dim, self.hid_dim)
-        self.hx = torch.zeros(1, self.hid_dim)
-        self.cx = torch.zeros(1, self.hid_dim)
-
-
-    def forward(self, obs):
-
-        obs = torch.tensor(obs).float().unsqueeze(0)
-        obs = self.relu(self.cnn1(obs))
-        obs = self.relu(self.cnn2(obs))
-        obs = self.relu(self.cnn3(obs))
-        obs = self.relu(self.cnn4(obs))
-        obs = self.linear_reduce(obs.flatten())
-        self.hx, self.cx = self.lstm(obs.unsqueeze(0), (self.hx, self.cx))
-        act_mov = self.final_linear_mov(self.hx)
-        act_inter = self.final_linear_inter(self.hx)
-        return int(torch.argmax(act_mov)), int(torch.argmax(act_inter))
-
-    def agg_func(self, inpt, inner_layer, outer_layer):
-        inpt = self.relu(inner_layer(inpt))
-        inpt = torch.mean(inpt, dim=0)
-        inpt = self.relu(outer_layer(inpt))
-        return inpt
-
-    def mutate(self):
-        super().mutate()
-        self.hx = torch.zeros(1, self.hid_dim)
-        self.cx = torch.zeros(1, self.hid_dim)
-
